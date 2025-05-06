@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments (in-project and others)
+.venv/
+venv/
+env/
+ENV/
+
+# Poetry lock and cache
+poetry.lock
+.cache/
+*.egg-info/
+dist/
+build/
+
+# Pytest cache
+.pytest_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml
+.cache
+
+# MyPy cache
+.mypy_cache/
+
+# macOS and general system files
+.DS_Store
+Thumbs.db
+
+# Test result logs or logs
+*.log
+
+# IPython
+.ipynb_checkpoints/
+
+# Task runner outputs
+taskipy.log

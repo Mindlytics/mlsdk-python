@@ -1,0 +1,44 @@
+[project]
+name = "mlsdk-python"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Andrew Peebles",email = "aqpeeb@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "asyncio (>=3.4.3,<4.0.0)",
+    "pydantic (>=2.11.4,<3.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "mlsdk", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+
+[tool.poetry.group.dev.dependencies]
+taskipy = "^1.14.1"
+pytest = "^8.3.5"
+black = "^25.1.0"
+mypy = "^1.15.0"
+pre-commit = "^4.2.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.taskipy.tasks]
+sanity = "bash -c 'poetry run task lint && poetry run task typecheck'"
+test = "pytest tests"
+lint = "black src tests"
+typecheck = "mypy src"
+format = "black src tests"
+build = "poetry build"
+publish = "poetry publish --build"
+install = "poetry install"
+check = "pre-commit run --all-files"
+
+[tool.flake8]
+max-line-length = 120
