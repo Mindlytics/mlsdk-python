@@ -42,3 +42,7 @@ check = "pre-commit run --all-files"
 
 [tool.flake8]
 max-line-length = 120
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "DEBUG"
