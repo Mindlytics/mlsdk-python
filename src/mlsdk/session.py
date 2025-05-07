@@ -3,8 +3,9 @@
 import asyncio
 import logging
 import uuid
-from .types import SessionConfig, ClientConfig
-from typing import Optional
+from .types import SessionConfig, ClientConfig, APIResponse
+from typing import Optional, List
+from .httpclient import HTTPClient
 
 logger = logging.getLogger(__name__)  # Use module name
 
@@ -36,10 +37,13 @@ class Session:
             self.session_id = str(uuid.uuid4())
         self.queue: Optional[asyncio.Queue] = None
         self.listen_task: Optional[asyncio.Task] = None
+        self.http_client = HTTPClient(config=client, sessionConfig=config)
         if client.debug is True:
             logger.setLevel(logging.DEBUG)
         else:
             logger.setLevel(logging.WARNING)
+        self.history: List[APIResponse] = []
+        self.errors = 0
 
     async def __aenter__(self) -> "Session":
         """Enter the runtime context related to this object.
@@ -75,6 +79,15 @@ class Session:
                 break
             # Process the message here
             logger.debug(f"Processing message: {str(message)}")
+            if message.get("test") is None:
+                response = await self.http_client.send_request(
+                    method="POST",
+                    url="/bc/v1/events/event",
+                    data=message,
+                )
+                self.history.append(response)
+                if response.errored:
+                    self.errors += 1
             self.queue.task_done()
         logger.debug(
             f"Finished processing messages in session with ID: {self.session_id}"
@@ -119,3 +132,27 @@ class Session:
             raise RuntimeError(
                 "Session is not started. Please start the session before enqueueing messages."
             )
+
+    def has_errors(self) -> bool:
+        """Check if there are any errors in the session.
+
+        Returns:
+            bool: True if there are errors, False otherwise.
+        """
+        return self.errors > 0
+
+    def get_history(self) -> List[APIResponse]:
+        """Get the history of API responses.
+
+        Returns:
+            List[APIResponse]: The history of API responses.
+        """
+        return self.history
+
+    def get_errors(self) -> List[APIResponse]:
+        """Return just the errored messages in history.
+
+        Returns:
+            List[APIResponse]: The history of API responses.
+        """
+        return [response for response in self.history if response.errored]

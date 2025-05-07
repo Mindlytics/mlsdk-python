@@ -32,3 +32,17 @@ class SessionConfig(BaseModel):
     session_id: Optional[str] = None
     project_id: str
     user_id: Optional[str] = None
+
+
+class APIResponse(BaseModel):
+    """Base class for API responses.
+
+    Attributes:
+        errored (bool): Indicates if the API response contains an error.
+        status (str): The status of the API response.
+        message (str): A message associated with the API response.
+    """
+
+    errored: bool
+    status: int
+    message: str
