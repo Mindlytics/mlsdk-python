@@ -40,3 +40,5 @@ Thumbs.db
 
 # Task runner outputs
 taskipy.log
+
+docs/_build/

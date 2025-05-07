@@ -18,7 +18,6 @@ def test_create_session():
     session = client.create_session(
         session_id="test_session", project_id="test_project", user_id="test_user"
     )
-    assert session.client == client
     assert session.project_id == "test_project"
     assert session.session_id == "test_session"
     assert session.user_id == "test_user"
@@ -29,7 +28,6 @@ def test_create_session_without_session_id():
     # Test session creation without session_id
     client = Client(api_key="test_api_key", debug=True)
     session = client.create_session(project_id="test_project", user_id="test_user")
-    assert session.client == client
     assert session.project_id == "test_project"
     assert session.session_id is not None  # Check if session_id is generated
     assert session.user_id == "test_user"

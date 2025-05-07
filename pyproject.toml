@@ -16,7 +16,7 @@ dependencies = [
 packages = [{include = "mlsdk", from = "src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<4.0"
+python = ">=3.11,<4.0"
 
 [tool.poetry.group.dev.dependencies]
 taskipy = "^1.14.1"
@@ -24,6 +24,12 @@ pytest = "^8.3.5"
 black = "^25.1.0"
 mypy = "^1.15.0"
 pre-commit = "^4.2.0"
+docformatter = "^1.7.5"
+pydocstyle = "^6.3.0"
+sphinx = "^8.2.3"
+sphinx-autobuild = "^2024.10.3"
+sphinx-rtd-theme = "^3.0.2"
+sphinxcontrib-napoleon = "^0.7"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -39,6 +45,8 @@ build = "poetry build"
 publish = "poetry publish --build"
 install = "poetry install"
 check = "pre-commit run --all-files"
+docs = "sphinx-build -b html docs docs/_build"
+docs_live = "sphinx-autobuild docs docs/_build"
 
 [tool.flake8]
 max-line-length = 120
@@ -46,3 +54,10 @@ max-line-length = 120
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "DEBUG"
+
+[tool.pydocstyle]
+match = '(?!__init__).*\.py'
+match-dir = '^src/'
+
+[tool.mypy]
+exclude = "docs/conf.py"
