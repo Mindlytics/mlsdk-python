@@ -12,11 +12,18 @@ from .types import (
     EndSession,
     StartConversation,
     EndConversation,
+    UserIdentify,
+    UserAlias,
+    ConversationTurn,
+    ConversationUsage,
+    TokenBasedCost,
+    Cost,
+    TurnPropertiesModel,
 )
+
 from typing import Optional, List, Dict, Union
 from .httpclient import HTTPClient
 from datetime import datetime, timezone
-
 
 logger = logging.getLogger(__name__)  # Use module name
 
@@ -368,6 +375,60 @@ class Session:
         )
         await self._enqueue(message.model_dump(exclude_none=True))
 
+    async def user_identify(
+        self,
+        *,
+        timestamp: Optional[str] = None,
+        id: str,
+        traits: Optional[Dict[str, Union[str, bool, int, float]]],
+    ) -> None:
+        """Identify a user with the given user ID and traits.
+
+        This method sends an identify event to the Mindlytics API, associating the user ID with the specified traits.
+        If the session is not started, it will be started automatically.
+
+        Args:
+            timestamp (str, optional): The timestamp of the identify event. Defaults to the current UTC timestamp.
+            id (str, optional): The ID of the user to identify.
+            traits (dict, optional): Additional traits associated with the user.
+        """
+        if self.session_id is None:
+            await self.start_session()
+        message = UserIdentify(
+            timestamp=timestamp or _utc_timestamp(),
+            session_id=str(self.session_id),
+            id=id,
+            traits=traits or {},
+        )
+        await self._enqueue(message.model_dump(exclude_none=True))
+
+    async def user_alias(
+        self,
+        *,
+        timestamp: Optional[str] = None,
+        id: str,
+        previous_id: str,
+    ) -> None:
+        """Alias a user with the given user ID and previous ID.
+
+        This method sends an alias event to the Mindlytics API, associating the user ID with the specified previous ID.
+        If the session is not started, it will be started automatically.
+
+        Args:
+            timestamp (str, optional): The timestamp of the alias event. Defaults to the current UTC timestamp.
+            id (str, optional): The ID of the user to alias.
+            previous_id (str, optional): The previous ID to associate with the user.
+        """
+        if self.session_id is None:
+            await self.start_session()
+        message = UserAlias(
+            timestamp=timestamp or _utc_timestamp(),
+            session_id=str(self.session_id),
+            id=id,
+            previous_id=previous_id,
+        )
+        await self._enqueue(message.model_dump(exclude_none=True))
+
     async def start_conversation(
         self,
         *,
@@ -413,3 +474,102 @@ class Session:
                 timestamp=timestamp, properties=properties
             )
         self.conversation_id = None
+
+    async def track_conversation_turn(
+        self,
+        *,
+        timestamp: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        user: str,
+        assistant: str,
+        assistant_id: Optional[str] = None,
+        cost: Optional[Union[TokenBasedCost, Cost]] = None,
+        properties: Optional[Dict[str, Union[str, bool, int, float]]] = None,
+    ) -> None:
+        """Track a turn in the conversation.
+
+        This method can be called to track a turn in the conversation.  If the session is not started, it will be
+        started automatically.  If the conversation_id is not supplied, it will be used to associate the event with
+        the current conversation.  If there is no current conversation, a new conversation will be started.
+
+        Args:
+            timestamp (str, optional): The timestamp of the conversation turn. Defaults to the current UTC timestamp.
+            conversation_id (str, optional): The ID of the conversation associated with the event.
+            user (str): The user input in the conversation.
+            assistant (str): The assistant output in the conversation.
+            assistant_id (str, optional): The ID of the assistant.
+            cost (TokenBasedCost or Cost, optional): The cost associated with the conversation turn.
+            properties (dict, optional): Additional properties associated with the conversation turn.
+        """
+        if self.session_id is None:
+            await self.start_session(timestamp=timestamp)
+
+        if conversation_id is None and self.conversation_id is None:
+            self.conversation_id = await self.start_conversation(
+                timestamp=timestamp, properties=properties
+            )
+        elif conversation_id is not None and self.conversation_id is not None:
+            if conversation_id != self.conversation_id:
+                raise ValueError(
+                    "Conversation ID does not match the current conversation ID."
+                )
+        elif conversation_id is not None:
+            self.conversation_id = conversation_id
+            await self.start_conversation(timestamp=timestamp, properties=properties)
+
+        p = TurnPropertiesModel(
+            user=user,
+            assistant=assistant,
+            assistant_id=assistant_id,
+            cost=cost,
+            **(properties or {}),
+        )
+        message = ConversationTurn(
+            timestamp=timestamp or _utc_timestamp(),
+            session_id=str(self.session_id),
+            conversation_id=str(self.conversation_id),
+            properties=p,
+        )
+        await self._enqueue(message.model_dump(exclude_none=True))
+
+    async def track_conversation_usage(
+        self,
+        *,
+        timestamp: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        cost: Union[TokenBasedCost, Cost],
+    ) -> None:
+        """Track the usage of the conversation.
+
+        This method can be called to track the usage of the conversation.  If the session is not started, it will be
+        started automatically.  If the conversation_id is not supplied, it will be used to associate the event with
+        the current conversation.  If there is no current conversation, a new conversation will be started.
+
+        Args:
+            timestamp (str, optional): The timestamp of the conversation usage. Defaults to the current UTC timestamp.
+            conversation_id (str, optional): The ID of the conversation associated with the event.
+            cost (TokenBasedCost or Cost, optional): The cost associated with the conversation usage.
+        """
+        if self.session_id is None:
+            await self.start_session(timestamp=timestamp)
+
+        if conversation_id is None and self.conversation_id is None:
+            self.conversation_id = await self.start_conversation(
+                timestamp=timestamp, properties={}
+            )
+        elif conversation_id is not None and self.conversation_id is not None:
+            if conversation_id != self.conversation_id:
+                raise ValueError(
+                    "Conversation ID does not match the current conversation ID."
+                )
+        elif conversation_id is not None:
+            self.conversation_id = conversation_id
+            await self.start_conversation(timestamp=timestamp, properties={})
+
+        message = ConversationUsage(
+            timestamp=timestamp or _utc_timestamp(),
+            session_id=str(self.session_id),
+            conversation_id=str(self.conversation_id),
+            properties=cost,
+        )
+        await self._enqueue(message.model_dump(exclude_none=True))

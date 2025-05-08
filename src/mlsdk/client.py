@@ -86,7 +86,7 @@ class Client:
     async def user_identify(
         self,
         *,
-        user_id: str,
+        id: str,
         traits: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> None:
         """Identify a user with the given user ID and traits.
@@ -94,14 +94,14 @@ class Client:
         This method sends an identify event to the Mindlytics API, associating the user ID with the specified traits.
         The traits can include various attributes of the user.
 
-        If the given user_id is known on the server, the traits will be merged into the existing user profile.
-        If the user_id is not known, a new user profile will be created with the given traits.
+        If the given user id is known on the server, the traits will be merged into the existing user profile.
+        If the user id is not known, a new user profile will be created with the given traits.
 
         Use this method when there is no associated session in progress.  If a session is in progress when
         the user is identified use the session.user_identify() method instead.
 
         Args:
-            user_id (str): The ID of the user to identify.
+            id (str): The ID of the user to identify.
             traits (dict, optional): A dictionary of traits associated with the user.
         """
         # TDB
@@ -110,7 +110,7 @@ class Client:
     async def user_alias(
         self,
         *,
-        user_id: str,
+        id: str,
         previous_id: str,
     ) -> None:
         """Alias a user with the given user ID and previous ID.
@@ -123,7 +123,7 @@ class Client:
         is aliased use the session.user_alias() method instead.
 
         Args:
-            user_id (str): The ID of the user to alias.
+            id (str): The ID of the user to alias.
             previous_id (str): The previous ID to associate with the user.
         """
         # TDB

@@ -11,6 +11,7 @@ Contents:
 
    client
    session
+   types
 
 ---
 

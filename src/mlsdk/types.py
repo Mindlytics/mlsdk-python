@@ -1,7 +1,7 @@
 """This module defines the data models used in the SDK."""
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, Any
 
 WIRE_TYPE_SESSION_STARTED = "start_session"
 WIRE_TYPE_SESSION_ENDED = "end_session"
@@ -134,3 +134,98 @@ class EndConversation(BaseEvent):
     type: str = Field(default=WIRE_TYPE_TRACK)
     event: str = Field(default=EVENT_CONVERSATION_ENDED)
     properties: Optional[Dict[str, Union[str, bool, int, float]]] = None
+
+
+class UserIdentify(BaseEvent):
+    """Event class for identifying a user.
+
+    Attributes:
+        type (str): The type of the event. Defaults to 'identify'.
+    """
+
+    type: str = Field(default=WIRE_TYPE_USER_IDENTIFY)
+    traits: Optional[Dict[str, Union[str, bool, int, float]]] = None
+    id: str = Field(..., min_length=1, max_length=100)
+
+
+class UserAlias(BaseEvent):
+    """Event class for aliasing a user.
+
+    Attributes:
+        type (str): The type of the event. Defaults to 'alias'.
+    """
+
+    type: str = Field(default=WIRE_TYPE_USER_ALIAS)
+    id: str = Field(..., min_length=1, max_length=100)
+    previous_id: str = Field(..., min_length=1, max_length=100)
+
+
+class TokenBasedCost(BaseModel):
+    """Common models have costs that are provided by a service on the web.
+
+    If you are using one of these models, you can provide the model name and the
+    number of tokens in the prompt and completion, and the cost will be calculated for you.
+    """
+
+    model: str = Field(..., min_length=1, max_length=100)
+    prompt_tokens: int
+    completion_tokens: int
+
+
+class Cost(BaseModel):
+    """If you know the cost of a conversation turn, you can provide it directly.
+
+    This will be accumulated in the conversation analysis.
+    """
+
+    cost: float
+
+
+class TurnPropertiesModel(BaseModel):
+    """Properties associated with a turn in a conversation."""
+
+    user: str = Field(..., min_length=1, max_length=100)
+    assistant: str = Field(..., min_length=1, max_length=100)
+    assistant_id: Optional[str] = None
+    cost: Optional[Union[TokenBasedCost, Cost]] = None
+
+    # This enables additional properties of various types
+    model_config = {"extra": "allow"}  # Allows additional fields beyond defined ones
+
+    # Custom validator to ensure additional fields are string, number, or boolean
+    def model_post_init(self, __context: Any) -> None:
+        """Post-initialization validation to ensure additional fields are of the correct type."""
+        for field_name, value in self.__dict__.items():
+            if field_name not in ("user", "assistant"):
+                if not isinstance(value, (str, int, float, bool)):
+                    raise ValueError(
+                        f"Field '{field_name}' must be a string, number, or boolean, got {type(value).__name__}"
+                    )
+
+
+class ConversationTurn(BaseEvent):
+    """Event class for a turn in a conversation.
+
+    Attributes:
+        type (str): The type of the event. Defaults to 'turn'.
+        properties (TurnPropertiesModel): The properties associated with the turn.
+    """
+
+    type: str = Field(default=WIRE_TYPE_TRACK)
+    event: str = Field(default=EVENT_CONVERSATION_TURN)
+    properties: TurnPropertiesModel
+    conversation_id: str
+
+
+class ConversationUsage(BaseEvent):
+    """Event class for usage in a conversation.
+
+    Attributes:
+        type (str): The type of the event. Defaults to 'usage'.
+        properties (TurnPropertiesModel): The properties associated with the usage.
+    """
+
+    type: str = Field(default=WIRE_TYPE_TRACK)
+    event: str = Field(default=EVENT_CONVERSATION_USAGE)
+    properties: Union[TokenBasedCost, Cost]
+    conversation_id: str
