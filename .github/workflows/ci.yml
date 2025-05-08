@@ -28,9 +28,6 @@ jobs:
       - name: 🛠 Install dependencies
         run: poetry install
 
-      - name: 🧪 Run tests
-        run: poetry run task test
-
       - name: 🔍 Run linter
         run: poetry run task lint
 

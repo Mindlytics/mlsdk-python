@@ -63,5 +63,5 @@ class HTTPClient:
                 return APIResponse(
                     errored=False,
                     status=response.status,
-                    message=await response.json(),
+                    message=await response.text(),
                 )

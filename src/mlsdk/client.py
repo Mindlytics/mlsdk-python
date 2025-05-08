@@ -53,14 +53,12 @@ class Client:
     def create_session(
         self,
         *,
-        session_id: Optional[str] = None,
         project_id: str,
         user_id: Optional[str] = None,
     ) -> Session:
         """Create a new session with the given parameters.
 
         Args:
-            session_id (str, optional): The ID of the session. If not provided, a new UUID will be generated.
             project_id (str): The ID of the project.
             user_id (str, optional): The ID of the user.
 
@@ -71,7 +69,6 @@ class Client:
             TypeError: If project_id is not provided.
         """
         config = SessionConfig(
-            session_id=session_id,
             project_id=project_id,
             user_id=user_id,
         )
