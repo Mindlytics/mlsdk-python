@@ -22,11 +22,13 @@ class ClientConfig(BaseModel):
 
     Attributes:
         api_key (str): The organization API key used for authentication.
+        project_id (str): The default project ID used to create sessions.
         server_endpoint (str, optional): The URL of the Mindlytics API. Defaults to the production endpoint.
         debug (bool, optional): Enable debug logging if True.
     """
 
     api_key: str
+    project_id: str
     server_endpoint: Optional[str] = None
     debug: bool = False
 
@@ -40,7 +42,7 @@ class SessionConfig(BaseModel):
         user_id (str, optional): The ID of the user associated with the session.
     """
 
-    project_id: str
+    project_id: Optional[str] = None
     user_id: Optional[str] = None
 
 

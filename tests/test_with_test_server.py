@@ -21,8 +21,13 @@ async def test_basic_auth_failure():
     # Test session as context manager
     if server is None:
         pytest.skip("SERVER_BASE environment variable is not set.")
-    client = Client(api_key="test_api_key", debug=True, server_endpoint=server)
-    session_context = client.create_session(project_id="test_project")
+    client = Client(
+        api_key="test_api_key",
+        project_id="test_project",
+        debug=True,
+        server_endpoint=server,
+    )
+    session_context = client.create_session()
     async with session_context as session:
         await session._enqueue({"foo": "bar"})
     assert session.has_errors() is True
@@ -51,8 +56,10 @@ async def test_basic_event_failure():
     # Test session as context manager
     if server is None:
         pytest.skip("SERVER_BASE environment variable is not set.")
-    client = Client(api_key=api_key, debug=True, server_endpoint=server)
-    session_context = client.create_session(project_id="test_project")
+    client = Client(
+        api_key=api_key, project_id="test_project", debug=True, server_endpoint=server
+    )
+    session_context = client.create_session()
     async with session_context as session:
         await session._enqueue({"foo": "bar"})
     assert session.has_errors() is True
@@ -67,8 +74,10 @@ async def test_basic_event_success():
     # Test session as context manager
     if server is None:
         pytest.skip("SERVER_BASE environment variable is not set.")
-    client = Client(api_key=api_key, debug=True, server_endpoint=server)
-    session_context = client.create_session(project_id="test_project")
+    client = Client(
+        api_key=api_key, project_id="test_project", debug=True, server_endpoint=server
+    )
+    session_context = client.create_session()
     async with session_context as session:
         await session.track_event(
             event="test_event",
