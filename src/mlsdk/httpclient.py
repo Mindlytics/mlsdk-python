@@ -28,7 +28,7 @@ class HTTPClient:
         self.config = config
         self.headers = {
             "Authorization": f"Bearer {self.config.api_key}",
-            "X-App-ID": sessionConfig.project_id,
+            "X-App-ID": str(sessionConfig.project_id),
         }
         if self.config.debug is True:
             logger.setLevel(logging.DEBUG)
