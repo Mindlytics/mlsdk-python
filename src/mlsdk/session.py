@@ -147,7 +147,7 @@ class Session:
                 "Session is not started. Please start the session before enqueueing messages."
             )
 
-    async def _send_session_started(self) -> None:
+    async def _send_session_started(self, timestamp: str | None) -> None:
         """Send a message indicating that the session has started.
 
         This method is a coroutine that sends a message indicating that the session has started.
@@ -157,31 +157,37 @@ class Session:
             if attributes.get("user_id") is None:
                 attributes["user_id"] = self.user_id
         message = StartSession(
-            timestamp=_utc_timestamp(),
+            timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
             attributes=attributes,
         )
         await self._enqueue(message.model_dump(exclude_none=True))
 
     async def _send_session_ended(
-        self, *, attributes: Optional[Dict[str, Union[str, bool, int, float]]]
+        self,
+        *,
+        timestamp: str | None,
+        attributes: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
         """Send a message indicating that the session has ended.
 
         This method is a coroutine that sends a message indicating that the session has ended.
 
         Args:
+            timestamp (str | None): The timestamp of the session end. Defaults to the current UTC timestamp.
             attributes (dict, optional): Additional attributes associated with the session.
         """
         message = EndSession(
-            timestamp=_utc_timestamp(),
+            timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
             attributes=attributes or {},
         )
         await self._enqueue(message.model_dump(exclude_none=True))
 
     async def _send_conversation_started(
-        self, properties: Optional[Dict[str, Union[str, bool, int, float]]]
+        self,
+        timestamp: str | None,
+        properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
         """Send a message indicating that the conversation has started.
 
@@ -191,7 +197,7 @@ class Session:
             self.conversation_id = str(uuid.uuid4())
 
         message = StartConversation(
-            timestamp=_utc_timestamp(),
+            timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
             conversation_id=self.conversation_id,
             properties=properties or {},
@@ -199,14 +205,16 @@ class Session:
         await self._enqueue(message.model_dump(exclude_none=True))
 
     async def _send_conversation_ended(
-        self, properties: Optional[Dict[str, Union[str, bool, int, float]]]
+        self,
+        timestamp: str | None,
+        properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
         """Send a message indicating that the conversation has ended.
 
         This method is a coroutine that sends a message indicating that the conversation has ended.
         """
         message = EndConversation(
-            timestamp=_utc_timestamp(),
+            timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
             conversation_id=str(self.conversation_id),
             properties=properties or {},
@@ -216,6 +224,7 @@ class Session:
     async def start_session(
         self,
         *,
+        timestamp: Optional[str] = None,
         session_id: Optional[str] = None,
         project_id: Optional[str] = None,
         user_id: Optional[str] = None,
@@ -227,6 +236,7 @@ class Session:
         events if the session is not already started, or when using the session as a context manager.
 
         Args:
+            timestamp (str, optional): The timestamp of the session start. Defaults to the current UTC timestamp.
             session_id (str, optional): The ID of the session. If not provided, a new session ID will be generated.
             project_id (str, optional): The ID of the project. If not provided, the default project ID (from Client)
                                         will be used.
@@ -247,10 +257,13 @@ class Session:
         if self.queue is None:
             self.queue = asyncio.Queue()
             self.listen_task = asyncio.create_task(self.__listen__())
-        await self._send_session_started()
+        await self._send_session_started(timestamp=timestamp)
 
     async def end_session(
-        self, *, attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None
+        self,
+        *,
+        timestamp: Optional[str] = None,
+        attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> None:
         """End the session.
 
@@ -258,15 +271,16 @@ class Session:
         It can be called directly or automatically when using the session as a context manager.
 
         Args:
+            timestamp (str, optional): The timestamp of the session end. Defaults to the current UTC timestamp.
             attributes (dict, optional): Additional attributes associated with the session.
         """
         if self.session_id is not None:
             logger.debug(f"Ending session with ID: {self.session_id}")
             if self.conversation_id is not None:
                 # send the end conversation message
-                await self._send_conversation_ended(properties={})
+                await self._send_conversation_ended(timestamp=timestamp, properties={})
             # send the end session message
-            await self._send_session_ended(attributes=attributes)
+            await self._send_session_ended(timestamp=timestamp, attributes=attributes)
             # send the terminating message
             if self.queue is not None:
                 await self.queue.put(None)
@@ -357,6 +371,7 @@ class Session:
     async def start_conversation(
         self,
         *,
+        timestamp: Optional[str] = None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> str:
         """Start a conversation in the session.
@@ -366,18 +381,22 @@ class Session:
         conversation-related events.
 
         Args:
+            timestamp (str, optional): The timestamp of the conversation. Defaults to the current UTC timestamp.
             properties (dict, optional): Additional properties associated with the conversation.
         """
         if self.session_id is None:
-            await self.start_session()
+            await self.start_session(timestamp=timestamp)
         if self.conversation_id is None:
             self.conversation_id = str(uuid.uuid4())
-        await self._send_conversation_started(properties=properties)
+        await self._send_conversation_started(
+            timestamp=timestamp, properties=properties
+        )
         return self.conversation_id
 
     async def end_conversation(
         self,
         *,
+        timestamp: Optional[str] = None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
         """End a conversation in the session.
@@ -386,8 +405,11 @@ class Session:
         session is ended or when using the session as a context manager.
 
         Args:
+            timestamp (str, optional): The timestamp of the conversation. Defaults to the current UTC timestamp.
             properties (dict, optional): Additional properties associated with the conversation.
         """
         if self.session_id is not None and self.conversation_id is not None:
-            await self._send_conversation_ended(properties=properties)
+            await self._send_conversation_ended(
+                timestamp=timestamp, properties=properties
+            )
         self.conversation_id = None
