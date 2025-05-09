@@ -236,7 +236,7 @@ class Session:
         project_id: Optional[str] = None,
         user_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
-    ) -> None:
+    ) -> str:
         """Start the session.
 
         This method can be called directly to start the session.  It might also be called automatically when sending
@@ -249,6 +249,9 @@ class Session:
                                         will be used.
             user_id (str, optional): The ID of the user, if known.
             attributes (dict, optional): Additional attributes associated with the session.
+
+        Returns:
+            str: The ID of the session.
         """
         if session_id is not None:
             self.session_id = session_id
@@ -265,6 +268,8 @@ class Session:
             self.queue = asyncio.Queue()
             self.listen_task = asyncio.create_task(self.__listen__())
         await self._send_session_started(timestamp=timestamp)
+
+        return self.session_id
 
     async def end_session(
         self,
@@ -433,7 +438,7 @@ class Session:
         self,
         *,
         timestamp: Optional[str] = None,
-        properties: Optional[Dict[str, Union[str, bool, int, float]]],
+        properties: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> str:
         """Start a conversation in the session.
 
@@ -458,7 +463,7 @@ class Session:
         self,
         *,
         timestamp: Optional[str] = None,
-        properties: Optional[Dict[str, Union[str, bool, int, float]]],
+        properties: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> None:
         """End a conversation in the session.
 
