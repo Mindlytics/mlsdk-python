@@ -128,8 +128,8 @@ class Session:
                     url="/bc/v1/events/event",
                     data=message,
                 )
-                self.history.append(response)
                 if response.errored:
+                    self.history.append(response)
                     self.errors += 1
             self.queue.task_done()
         logger.debug(
@@ -154,7 +154,7 @@ class Session:
                 "Session is not started. Please start the session before enqueueing messages."
             )
 
-    async def _send_session_started(self, timestamp: str | None) -> None:
+    async def _send_session_started(self, *, timestamp: str | None) -> None:
         """Send a message indicating that the session has started.
 
         This method is a coroutine that sends a message indicating that the session has started.
@@ -193,6 +193,7 @@ class Session:
 
     async def _send_conversation_started(
         self,
+        *,
         timestamp: str | None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
@@ -213,6 +214,7 @@ class Session:
 
     async def _send_conversation_ended(
         self,
+        *,
         timestamp: str | None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
@@ -307,24 +309,6 @@ class Session:
             bool: True if there are errors, False otherwise.
         """
         return self.errors > 0
-
-    def get_history(self) -> List[APIResponse]:
-        """Get the history of API responses.
-
-        Returns:
-            List[APIResponse]: The history of API responses.
-
-        Example:
-            >>> await session.track_event(event="test_event_1")
-            >>> await session.track_event(event="test_event_2")
-            >>> await session.end_session()
-            >>> history = session.get_history()
-            >>> for response in history:
-            ...     print(response)
-            APIResponse(errored=False, status=200, message="Success")
-            APIResponse(errored=False, status=200, message="Success")
-        """
-        return self.history
 
     def get_errors(self) -> List[APIResponse]:
         """Return just the errored messages in history.
