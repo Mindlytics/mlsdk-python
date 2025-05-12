@@ -68,14 +68,14 @@ from mlsdk import Client
 client = Client(api_key="KEY", project_id="ID")
 ```
 
-**Arguments**
+**Arguments:**
 
 * api_key - Your Mindlytics workspace api key.
 * project_id - The ID of a project in your workspace.  Used to create sessions.
 * debug (optional, False) - Enable to turn on logging.
 * server_endpoint (optional) - Use a different endpoint for the Mindlytics server.
 
-**Returns**
+**Returns:**
 
 An instance of the Mindlytics client object.  This is used primarily to create sessions, but has two other methods for identifying users and managing aliasing outside of normal sessions.
 
@@ -97,12 +97,12 @@ except MLHTTPError as (e):
 
 Used to identify new users and to merge traits on existing users.
 
-**Arguments**
+**Arguments:**
 
 * id - A unique user id for a new user or an existing user for the workspace/project specified in `client`.  If this id already exists, the given traits are merged with any existing traits.  Any existing matching traits are over written.  Mindlytics supports strings, booleans, and numbers as trait values.
 * traits - (optional, None) - A dict of user traits.
 
-**Returns:***
+**Returns:**
 
 A Mindlytics user object.
 
@@ -120,12 +120,12 @@ except MLHTTPError as (e):
 
 Used to create an alias for an existing user.
 
-**Arguments**
+**Arguments:**
 
 * id - The new id for this user.
 * previous_id - The previous id value for this user.  The previous_id is used for the lookup.
 
-**Returns:***
+**Returns:**
 
 A Mindlytics user object.
 
@@ -289,7 +289,7 @@ await sessuin.user_alias(
 
 Used to create an alias for an existing user within a session.
 
-**Arguments**
+**Arguments:**
 
 * timestamp - (optional, None) If specified, the timestamp associated with this event.
 * id - The new id for this user.
