@@ -30,13 +30,13 @@ The SDK can be used as a context manager, but it can also be used outside a cont
 
 ## Concepts
 
-Except for client-level user identify and alias, all over communication with Mindlytics is contained within a "session".  In a session you may send your own "user defined" events; that is, events that are not specific to Mindlytics but are meaningful to you.  In a session you may also start a "conversation" and send special Mindlytics events related to this conversation.  Events happen at a point in time, but sessions and conversations have a start and an end and thus a specific duration.  This means you have to start them and end them.  Depending on how you use the SDK, sessions and conversations can be automatically started and ended for you and you don't have to worry about it.
+Except for client-level user identify and alias, all other communication with Mindlytics is contained within a "session".  In a session you may send your own "user defined" events; that is, events that are not specific to Mindlytics but are meaningful to you.  In a session you may also start a "conversation" and send special Mindlytics events related to this conversation.  Events happen at a point in time, but sessions and conversations have a start and an end and thus a specific duration.  This means you have to start them and end them.  Depending on how you use the SDK, sessions and conversations can be automatically started and ended for you and you don't have to worry about it.
 
-Sessions, conversations and events have attributes (sessions) and properties (conversations, events) that are optional and ignored by Mindlytics, but which you can populate with meaningful data that you wish to associate with them.
+Sessions, conversations and events have attributes (sessions) and properties (conversations, events) that are optional, but which you can populate with meaningful data that you wish to associate with them.
 
 ## Architecture
 
-The Mindlytics SDK is designed to have an absolute minimal impact on your application.  The SDK requires `asyncio` and uses an asynchronous queue to decouple your application from the actual communication with Mindlytics.  When you interact with the SDK your data gets pushed into an asynchronous FIFO and the SDK returns control to your application immediately.  In the background the SDK removed data from the queue and tries to send it to the Mindlytics service.  The SDK handles errors, and any timeouts, retries or rate limits as it tries to get the data to the server.  When your application exists there is a way to wait on the SDK to completely drain the queue so no data is lost.
+The Mindlytics SDK is designed to have an absolute minimal impact on your application.  The SDK requires `asyncio` and uses an asynchronous queue to decouple your application from the actual communication with Mindlytics.  When you interact with the SDK your data gets pushed into an asynchronous FIFO and the SDK returns control to your application immediately.  In the background the SDK removes data from the queue and tries to send it to the Mindlytics service.  The SDK handles errors, and any timeouts, retries or rate limits as it tries to get the data to the server.  When your application exists there is a way to wait on the SDK to completely drain the queue so no data is lost.
 
 ## Errors
 
@@ -48,7 +48,7 @@ if session.has_errors():
         print(f"{err.status}: {err.message}")
 ```
 
-You may also register a function as a error callback if you'd like immediate notification of errors:
+You may also register a function as a error callback if you'd like notification of errors as they occur:
 
 ```python
 from mlsdk import Client, APIResponse
@@ -193,7 +193,7 @@ await session.end_session(
 )
 ```
 
-Depending on your specific needs, you can use the Mindlytics SDK in a few different ways.  The safest and easiest way is to use a session as an asynio context manager.  If you use it this way, then sessions and conversations are created as needed internally and are shut down gracefully when the session instance goes out of context or is destroyed.  All you have to do within the context is send events.
+Depending on your specific needs, you can use the Mindlytics SDK in a few different ways.  The safest and easiest way is to use a session as an `asynio` context manager.  If you use it this way, then sessions and conversations are created as needed internally and are shut down gracefully when the session instance goes out of context or is destroyed.  All you have to do within the context is send events.
 
 If you cannot use a context, then you can call session methods by themselves.  Sessions and conversations will be started on demand as before, but you **must** explicitly call `await session.end_session()` before exiting your application to ensure that all queued requests get sent to the Mindlytics service.
 
@@ -364,7 +364,7 @@ Send a single "turn" of a conversation to the Mindlytics service for analysis.
 * properties - (optional, dict) A dictionary of arbitrary properties you may want to associate with this conversation turn.
 * cost - (optional, None) Use this to track your conversational LLM costs.
 
-You can optionally track your own conversational LLM costs in Mindlytics.  You can do this on a turn-by-turn basis using this method, or on a less grainular basis using the method described below.  You can specify costs in one of two ways; if your LLM is a popular, known LLM you may send your model's name and the prompt and completion token counts, and Mindlytics will use an online database to look up the per-token costs for this model and do the math.  Or, you may pass in an actual cost as a float, if you know it or are using a less popular LLM.  The "cost" property can be one of:
+You can optionally track your own conversational LLM costs in Mindlytics.  You can do this on a turn-by-turn basis using this method, or on a less granular basis using the method described below.  You can specify costs in one of two ways; if your LLM is a popular, known LLM you may send your model's name and the prompt and completion token counts, and Mindlytics will use an online database to look up the per-token costs for this model and do the math.  Or you may pass in an actual cost as a float, if you know it or are using a less popular LLM.  The "cost" property can be one of:
 
 ```python
 class TokenBasedCost(BaseModel):
