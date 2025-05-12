@@ -1,8 +1,8 @@
 """Client module for Mindlytics SDK."""
 
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, Callable
 import logging
-from .types import ClientConfig, SessionConfig
+from .types import ClientConfig, SessionConfig, APIResponse
 from .session import Session
 
 logger = logging.getLogger(__name__)  # Use module name
@@ -62,6 +62,7 @@ class Client:
         project_id: Optional[str] = None,
         user_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
+        err_callback: Optional[Callable[[APIResponse], None]] = None,
     ) -> Session:
         """Create a new session with the given parameters.
 
@@ -73,6 +74,7 @@ class Client:
             project_id (str, optional): The ID of the project.
             user_id (str, optional): The ID of the user.
             attributes (dict, optional): A dictionary of attributes associated with the session.
+            err_callback (callable, optional): A callback function to handle errors.
 
         Returns:
             Session: A new session object.
@@ -81,7 +83,12 @@ class Client:
             project_id=project_id or self.config.project_id,
             user_id=user_id,
         )
-        return Session(client=self.config, config=config, attributes=attributes)
+        return Session(
+            client=self.config,
+            config=config,
+            attributes=attributes,
+            err_callback=err_callback,
+        )
 
     async def user_identify(
         self,

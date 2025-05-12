@@ -21,7 +21,7 @@ from .types import (
     TurnPropertiesModel,
 )
 
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Callable
 from .httpclient import HTTPClient
 from datetime import datetime, timezone
 
@@ -65,6 +65,7 @@ class Session:
         client: ClientConfig,
         config: SessionConfig,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
+        err_callback: Optional[Callable[[APIResponse], None]] = None,
     ) -> None:
         """Initialize the Session with the given parameters.
 
@@ -72,16 +73,19 @@ class Session:
             client (Client): The client instance used to communicate with the Mindlytics service.
             config (SessionConfig): The configuration for the session.
             attributes (dict, optional): Additional attributes associated with the session.
+            err_callback (callable, optional): A callback function to handle errors.
         """
         self.client = client
         self.session_id: str | None = None
         self.project_id = config.project_id
         self.conversation_id: str | None = None
+        self.conversation_ids: List[str] = []
         self.attributes = attributes
         self.user_id = config.user_id
         self.queue: Optional[asyncio.Queue] = None
         self.listen_task: Optional[asyncio.Task] = None
         self.http_client = HTTPClient(config=client, sessionConfig=config)
+        self.err_callback = err_callback
         if client.debug is True:
             logger.setLevel(logging.DEBUG)
         else:
@@ -131,6 +135,8 @@ class Session:
                 if response.errored:
                     self.history.append(response)
                     self.errors += 1
+                    if self.err_callback is not None:
+                        self.err_callback(response)
             self.queue.task_done()
         logger.debug(
             f"Finished processing messages in session with ID: {self.session_id}"
@@ -194,20 +200,18 @@ class Session:
     async def _send_conversation_started(
         self,
         *,
-        timestamp: str | None,
+        conversation_id: str,
+        timestamp: Optional[str] | None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
         """Send a message indicating that the conversation has started.
 
         This method is a coroutine that sends a message indicating that the conversation has started.
         """
-        if self.conversation_id is None:
-            self.conversation_id = str(uuid.uuid4())
-
         message = StartConversation(
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
-            conversation_id=self.conversation_id,
+            conversation_id=conversation_id,
             properties=properties or {},
         )
         await self._enqueue(message.model_dump(exclude_none=True))
@@ -215,6 +219,7 @@ class Session:
     async def _send_conversation_ended(
         self,
         *,
+        conversation_id: str,
         timestamp: str | None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
@@ -225,7 +230,7 @@ class Session:
         message = EndConversation(
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
-            conversation_id=str(self.conversation_id),
+            conversation_id=conversation_id,
             properties=properties or {},
         )
         await self._enqueue(message.model_dump(exclude_none=True))
@@ -290,9 +295,17 @@ class Session:
         """
         if self.session_id is not None:
             logger.debug(f"Ending session with ID: {self.session_id}")
-            if self.conversation_id is not None:
-                # send the end conversation message
-                await self._send_conversation_ended(timestamp=timestamp, properties={})
+            if len(self.conversation_ids) > 0:
+                # send the end conversation message for each conversation
+                for conversation_id in self.conversation_ids:
+                    await self._send_conversation_ended(
+                        conversation_id=conversation_id,
+                        timestamp=timestamp,
+                        properties={},
+                    )
+            # clear the conversation IDs
+            self.conversation_ids = []
+            self.conversation_id = None
             # send the end session message
             await self._send_session_ended(timestamp=timestamp, attributes=attributes)
             # send the terminating message
@@ -422,30 +435,50 @@ class Session:
         self,
         *,
         timestamp: Optional[str] = None,
+        conversation_id: Optional[str] = None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> str:
         """Start a conversation in the session.
 
-        If the session is not started, it will be started automatically.  If the conversation_id is not supplied, a new
-        conversation_id will be generated.  This method might be called automatically when sending
-        conversation-related events.
+        If the session is not started, it will be started automatically.  This method might be called
+        automatically when sending conversation-related events.
 
         Args:
             timestamp (str, optional): The timestamp of the conversation. Defaults to the current UTC timestamp.
+            conversation_id (str, optional): The ID of the conversation. If not provided, a new conversation ID will
             properties (dict, optional): Additional properties associated with the conversation.
         """
         if self.session_id is None:
             await self.start_session(timestamp=timestamp)
-        if self.conversation_id is None:
-            self.conversation_id = str(uuid.uuid4())
+        self.conversation_id = conversation_id or str(uuid.uuid4())
+        self.conversation_ids.append(self.conversation_id)
         await self._send_conversation_started(
-            timestamp=timestamp, properties=properties
+            timestamp=timestamp,
+            properties=properties,
+            conversation_id=self.conversation_id,
         )
         return self.conversation_id
+
+    def _remove_item_from_array(self, array: List[str], item: str) -> List[str]:
+        """Remove an item from an array.
+
+        This method removes the first occurrence of the specified item from the array.
+
+        Args:
+            array (list): The array to remove the item from.
+            item (str): The item to remove.
+
+        Returns:
+            list: The updated array.
+        """
+        if item in array:
+            array.remove(item)
+        return array
 
     async def end_conversation(
         self,
         *,
+        conversation_id: Optional[str] = None,
         timestamp: Optional[str] = None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> None:
@@ -455,13 +488,22 @@ class Session:
         session is ended or when using the session as a context manager.
 
         Args:
+            conversation_id (str, optional): The ID of the conversation to end. If not provided, the current
+            conversation will be used.
             timestamp (str, optional): The timestamp of the conversation. Defaults to the current UTC timestamp.
             properties (dict, optional): Additional properties associated with the conversation.
         """
-        if self.session_id is not None and self.conversation_id is not None:
+        if self.session_id is not None and (
+            self.conversation_id is not None or conversation_id is not None
+        ):
             await self._send_conversation_ended(
-                timestamp=timestamp, properties=properties
+                timestamp=timestamp,
+                properties=properties,
+                conversation_id=str(conversation_id or self.conversation_id),
             )
+        self._remove_item_from_array(
+            self.conversation_ids, str(conversation_id or self.conversation_id)
+        )
         self.conversation_id = None
 
     async def track_conversation_turn(
@@ -493,18 +535,14 @@ class Session:
         if self.session_id is None:
             await self.start_session(timestamp=timestamp)
 
-        if conversation_id is None and self.conversation_id is None:
-            self.conversation_id = await self.start_conversation(
-                timestamp=timestamp, properties=properties
-            )
-        elif conversation_id is not None and self.conversation_id is not None:
-            if conversation_id != self.conversation_id:
-                raise ValueError(
-                    "Conversation ID does not match the current conversation ID."
+        # If conversation_id passed in is not None, then we can assume there is a conversation already started,
+        # otherwise we might start a new one
+
+        if conversation_id is not None:
+            if self.conversation_id is None:
+                self.conversation_id = await self.start_conversation(
+                    timestamp=timestamp
                 )
-        elif conversation_id is not None:
-            self.conversation_id = conversation_id
-            await self.start_conversation(timestamp=timestamp, properties=properties)
 
         p = TurnPropertiesModel(
             user=user,
@@ -516,7 +554,7 @@ class Session:
         message = ConversationTurn(
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
-            conversation_id=str(self.conversation_id),
+            conversation_id=str(conversation_id or self.conversation_id),
             properties=p,
         )
         await self._enqueue(message.model_dump(exclude_none=True))
@@ -542,23 +580,19 @@ class Session:
         if self.session_id is None:
             await self.start_session(timestamp=timestamp)
 
-        if conversation_id is None and self.conversation_id is None:
-            self.conversation_id = await self.start_conversation(
-                timestamp=timestamp, properties={}
-            )
-        elif conversation_id is not None and self.conversation_id is not None:
-            if conversation_id != self.conversation_id:
-                raise ValueError(
-                    "Conversation ID does not match the current conversation ID."
+        # If conversation_id passed in is not None, then we can assume there is a conversation already started,
+        # otherwise we might start a new one
+
+        if conversation_id is not None:
+            if self.conversation_id is None:
+                self.conversation_id = await self.start_conversation(
+                    timestamp=timestamp
                 )
-        elif conversation_id is not None:
-            self.conversation_id = conversation_id
-            await self.start_conversation(timestamp=timestamp, properties={})
 
         message = ConversationUsage(
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
-            conversation_id=str(self.conversation_id),
+            conversation_id=str(conversation_id or self.conversation_id),
             properties=cost,
         )
         await self._enqueue(message.model_dump(exclude_none=True))
