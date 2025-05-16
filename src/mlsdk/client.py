@@ -1,9 +1,10 @@
 """Client module for Mindlytics SDK."""
 
-from typing import Optional, Dict, Union, Callable
+from typing import Optional, Dict, Union, Callable, Any
 import logging
 from .types import ClientConfig, SessionConfig, APIResponse
 from .session import Session
+from .httpclient import HTTPClient
 
 logger = logging.getLogger(__name__)  # Use module name
 
@@ -60,19 +61,21 @@ class Client:
         self,
         *,
         project_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        id: Optional[str] = None,
+        device_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
         err_callback: Optional[Callable[[APIResponse], None]] = None,
     ) -> Session:
         """Create a new session with the given parameters.
 
         This method creates a new session object that can be used to send events to the Mindlytics API.  The project_id
-        and user_id can be specified, but if not provided,  the default project_id from the client configuration will
-        be used.  Pass a user_id to associate the session with a specific user if you know the user.
+        and id can be specified, but if not provided,  the default project_id from the client configuration will
+        be used.  Pass a id to associate the session with a specific user if you know the user.
 
         Args:
             project_id (str, optional): The ID of the project.
-            user_id (str, optional): The ID of the user.
+            id (str, optional): The ID of the user.
+            device_id (str, optional): The device ID associated with the user.
             attributes (dict, optional): A dictionary of attributes associated with the session.
             err_callback (callable, optional): A callback function to handle errors.
 
@@ -81,7 +84,8 @@ class Client:
         """
         config = SessionConfig(
             project_id=project_id or self.config.project_id,
-            user_id=user_id,
+            id=id,
+            device_id=device_id,
         )
         return Session(
             client=self.config,
@@ -93,7 +97,8 @@ class Client:
     async def user_identify(
         self,
         *,
-        id: str,
+        id: Optional[str] = None,
+        device_id: Optional[str] = None,
         traits: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> None:
         """Identify a user with the given user ID and traits.
@@ -109,10 +114,47 @@ class Client:
 
         Args:
             id (str): The ID of the user to identify.
+            device_id (str): The device ID associated with the user.
             traits (dict, optional): A dictionary of traits associated with the user.
         """
-        # TDB
-        pass
+        client = HTTPClient(
+            config=self.config,
+            sessionConfig=SessionConfig(
+                project_id=self.config.project_id,
+                id=id,
+            ),
+        )
+
+        data: Dict[str, Any] = {}
+        if id is not None:
+            data["id"] = id
+        if device_id is not None:
+            data["device_id"] = device_id
+        if traits is not None:
+            traits_dict = {}
+            for key, value in traits.items():
+                if isinstance(value, (str, bool, int, float)):
+                    traits_dict[key] = value
+                else:
+                    logger.warning(
+                        f"Invalid type for trait '{key}': {type(value)}. "
+                        "Only str, bool, int, and float are allowed."
+                    )
+                    continue
+            data["traits"] = traits_dict
+        response = await client.send_request(
+            method="POST",
+            url="/bc/v1/user/identify",
+            data=data,
+        )
+        if response.errored:
+            raise Exception(f"Error identifying user: {response.message}")
+        if id is not None:
+            logger.debug(f"User identified: {id} with traits: {traits}")
+        else:
+            logger.debug(
+                f"User identified with device ID: {device_id} and traits: {traits}"
+            )
 
     async def user_alias(
         self,
@@ -133,5 +175,22 @@ class Client:
             id (str): The ID of the user to alias.
             previous_id (str): The previous ID to associate with the user.
         """
-        # TDB
-        pass
+        client = HTTPClient(
+            config=self.config,
+            sessionConfig=SessionConfig(
+                project_id=self.config.project_id,
+                id=id,
+            ),
+        )
+        data = {
+            "id": id,
+            "previous_id": previous_id,
+        }
+        response = await client.send_request(
+            method="POST",
+            url="/bc/v1/user/alias",
+            data=data,
+        )
+        if response.errored:
+            raise Exception(f"Error aliasing user: {response.message}")
+        logger.debug(f"User {id} aliased to {previous_id}")

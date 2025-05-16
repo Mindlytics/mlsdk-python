@@ -1,6 +1,6 @@
 """This module defines the data models used in the SDK."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Dict, Union, Any
 
 WIRE_TYPE_SESSION_STARTED = "start_session"
@@ -39,11 +39,19 @@ class SessionConfig(BaseModel):
 
     Attributes:
         project_id (str): The ID of the project associated with the session.
-        user_id (str, optional): The ID of the user associated with the session.
+        id (str, optional): The ID of the user associated with the session.
     """
 
     project_id: Optional[str] = None
-    user_id: Optional[str] = None
+    id: Optional[str] = None
+    device_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def check_id_or_device_id(self):
+        """Validate that either id or device_id (or both) is provided."""
+        if self.id is None and self.device_id is None:
+            raise ValueError("Either 'id' or 'device_id' must be provided")
+        return self
 
 
 class APIResponse(BaseModel):
@@ -96,7 +104,16 @@ class StartSession(BaseEvent):
     """
 
     type: str = Field(default=WIRE_TYPE_SESSION_STARTED)
+    id: Optional[str] = Field(None, min_length=1, max_length=100)
+    device_id: Optional[str] = Field(None, min_length=1, max_length=100)
     attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None
+
+    @model_validator(mode="after")
+    def check_id_or_device_id(self):
+        """Validate that either id or device_id (or both) is provided."""
+        if self.id is None and self.device_id is None:
+            raise ValueError("Either 'id' or 'device_id' must be provided")
+        return self
 
 
 class EndSession(BaseEvent):
@@ -145,7 +162,21 @@ class UserIdentify(BaseEvent):
 
     type: str = Field(default=WIRE_TYPE_USER_IDENTIFY)
     traits: Optional[Dict[str, Union[str, bool, int, float]]] = None
-    id: str = Field(..., min_length=1, max_length=100)
+    id: Optional[str] = Field(None, min_length=1, max_length=100)
+    device_id: Optional[str] = Field(None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def check_id_or_device_id(self):
+        """Validate that either id or device_id (or both) is provided."""
+        if self.id is None and self.device_id is None:
+            raise ValueError("Either 'id' or 'device_id' must be provided")
+        return self
+
+    model_config = {
+        "json_schema_extra": {
+            "description": "The event that identifies a user - requires either id or device_id (or both)"
+        }
+    }
 
 
 class UserAlias(BaseEvent):

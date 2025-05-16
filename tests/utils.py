@@ -27,6 +27,27 @@ async def get_api_key(organization_id: str) -> str:
             return data["apikey"]
 
 
+async def cleanup() -> dict:
+    """Cleanup function to be called after each test.
+
+    This function is a placeholder for any cleanup operations that need to be performed
+    after running tests. Currently, it does not perform any actions.
+    """
+    server = os.getenv("SERVER_BASE")
+    super = os.getenv("SUPER_API_KEY")
+    async with aiohttp.ClientSession() as session:
+        async with session.request(
+            "GET",
+            f"{server}/bc/v1/db/_cleanup",
+            headers={"Authorization": f"Bearer {super}"},
+            json={},
+        ) as response:
+            if response.status != 200:
+                raise Exception(f"Error: {response.status} - {await response.text()}")
+            data = await response.json()
+            return data
+
+
 async def fetch(
     *,
     api_key: str,

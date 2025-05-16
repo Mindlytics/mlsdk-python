@@ -34,6 +34,12 @@ Except for client-level user identify and alias, all other communication with Mi
 
 Sessions, conversations and events have attributes (sessions) and properties (conversations, events) that are optional, but which you can populate with meaningful data that you wish to associate with them.
 
+### User ID and Device ID
+
+User IDs are something you can decide to use or not use.  If you decide to use them, user ids should be unique for a organization/project pair.  You can use anything you like as long as it is a string, and is unique for each user in a project.  Device IDs should represent unique devices, like a browser instance or a mobile device uuid.  Device IDs are considered globally unique.  If you do not use user ids, then you must use device ids.  You can use both.
+
+| TBD more detail needed here
+
 ## Architecture
 
 The Mindlytics SDK is designed to have an absolute minimal impact on your application.  The SDK requires `asyncio` and uses an asynchronous queue to decouple your application from the actual communication with Mindlytics.  When you interact with the SDK your data gets pushed into an asynchronous FIFO and the SDK returns control to your application immediately.  In the background the SDK removes data from the queue and tries to send it to the Mindlytics service.  The SDK handles errors, and any timeouts, retries or rate limits as it tries to get the data to the server.  When your application exists there is a way to wait on the SDK to completely drain the queue so no data is lost.
@@ -83,7 +89,7 @@ An instance of the Mindlytics client object.  This is used primarily to create s
 from mlsdk import Client, MLHTTPError
 
 try:
-    user = await client.user_identify(
+    await client.user_identify(
         id="JJ@mail.com",
         traits={
             "name": "Jacob Jones",
@@ -95,22 +101,19 @@ except MLHTTPError as (e):
     print(f"{e.status} - {e.message}")
 ```
 
-Used to identify new users and to merge traits on existing users.
+Used to identify new users or devices and to merge traits on existing users or devices.
 
 **Arguments:**
 
 * id - A unique user id for a new user or an existing user for the workspace/project specified in `client`.  If this id already exists, the given traits are merged with any existing traits.  Any existing matching traits are over written.  Mindlytics supports strings, booleans, and numbers as trait values.
-* traits - (optional, None) - A dict of user traits.
-
-**Returns:**
-
-A Mindlytics user object.
+* device_id - (optional, None) A unique device id.  One of id or device_id is required.
+* traits - (optional, None) - A dict of user or device traits.
 
 ```python
 from mlsdk import Client, MLHTTPError
 
 try:
-    user = await client.user_alias(
+    await client.user_alias(
         id="jjacob",
         previous_id="JJ@mail.com",
     )
@@ -125,12 +128,8 @@ Used to create an alias for an existing user.
 * id - The new id for this user.
 * previous_id - The previous id value for this user.  The previous_id is used for the lookup.
 
-**Returns:**
-
-A Mindlytics user object.
-
 ```python
-session = client.create_session()
+session = client.create_session(id='jjacob')
 
 # Use session as a context manager
 async with session as ml:
@@ -149,7 +148,7 @@ await session.end_session()
 # Or control the entire workflow manually
 session_id = await sesson.start_session(
     timestamp="2025-04-03T07:35:10.0000Z",
-    user_id="jjacob",
+    id="jjacob",
     attributes={
         "store": "135"
     }
@@ -201,17 +200,18 @@ Using those two methods makes using the SDK pretty easy but does not give you co
 
 **Arguments:**
 
-* project_id - (optional, None) If specified, will over write the value given when creating the client.
-* user_id - (optional, None) If the user id for this session is known, you can pass it here.
+* project_id - (optional, None) If specified, will overwrite the value given when creating the client.
+* id - (optional, None) If the user id for this session is known, you can pass it here.
+* device_id - (optional, None) A device id.  If user id is not passed, then device_id is required.
 * attributes - (optional, None) Can pass a dictionary of str|int|float|bool of custom attributes.
 * err_callback - (optional, None) A function that will be called whenever SDK detects an error with the Mindlytics service.
 
-If a `user_id` is not passed, the session will be associated with a temporary anonymous user until the actual user is identified.
+If an `id` is not passed, the session will be associated with a temporary anonymous user until the actual user is identified.
 
 ## Session API
 
 ```python
-session_id = await session.start_session()
+session_id = await session.start_session(id='jjacob')
 ```
 
 To send events to Mindlytics you must start a session.  In some cases, this session is created for you and you don't need to worry about it.
@@ -221,7 +221,8 @@ To send events to Mindlytics you must start a session.  In some cases, this sess
 * session_id - (optional, None) You can supply your own globally unique session id.  If you do not, then a uuid string is created by the SDK.
 * timestamp - (optional, None) If importing past data you can specify a timestamp for the creation of this session.
 * project_id - (optional, None) The project_id for this session.  Defaults to the project_id passed to the Mindlytics client.
-* user_id - (optional, None) The user id for this session, if you know it.  Otherwise an anonymous user will be created.
+* id - (optional, None) The user id for this session, if you know it.  Otherwise an anonymous user will be created.
+* device_id - (optional, None) A unique device id.  If user id is not passed, then device_id is required.
 * attributes - (optional, None) A dictionary of arbitrary attributes you may want to associated with this session.
 
 **Returns:**
@@ -277,7 +278,8 @@ If the user involved in a session becomes know during the session, or if the use
 **Attributes:**
 
 * timestamp - (optional, None) If specified, the timestamp associated with this event.  For new users, this becomes their start date.
-* id - A unique user id for a new user or an existing user for the workspace/project specified in `client`.  If this id already exists, the given traits are merged with any existing traits.  Any existing matching traits are over written.  Mindlytics supports strings, booleans, and numbers as trait values.
+* id - (optional, None) A unique user id for a new user or an existing user for the workspace/project specified in `client`.  If this id already exists, the given traits are merged with any existing traits.  Any existing matching traits are over written.  Mindlytics supports strings, booleans, and numbers as trait values.
+* device_id - (optional, None) A unique device id.  If user id is not passed then device_id is requiredd.
 * traits - (optional, None) - A dict of user traits.
 
 ```python

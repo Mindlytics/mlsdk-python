@@ -1,8 +1,11 @@
 import pytest
+import pytest_asyncio
 import os
 from mlsdk import Client
 import logging
-from .utils import get_api_key
+from .utils import get_api_key, cleanup
+
+debug = False
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)  # Use module name
@@ -16,6 +19,17 @@ if server is None:
     )
 
 
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def after():
+    # Setup for test2.py
+    logger.debug("Setting up test2.py resources")
+    yield  # This allows all tests to run
+    # Cleanup after all tests in test2.py have finished
+    logger.debug("Cleaning up test2.py resources")
+    await cleanup()
+    # Specific cleanup code for test2.py
+
+
 @pytest.mark.asyncio
 async def test_basic_auth_failure():
     # Test session as context manager
@@ -24,10 +38,10 @@ async def test_basic_auth_failure():
     client = Client(
         api_key="test_api_key",
         project_id="test_project",
-        debug=True,
+        debug=debug,
         server_endpoint=server,
     )
-    session_context = client.create_session()
+    session_context = client.create_session(device_id="test_device_id")
     async with session_context as session:
         await session._enqueue({"foo": "bar"})
     assert session.has_errors() is True
@@ -57,9 +71,9 @@ async def test_basic_event_failure():
     if server is None:
         pytest.skip("SERVER_BASE environment variable is not set.")
     client = Client(
-        api_key=api_key, project_id="test_project", debug=True, server_endpoint=server
+        api_key=api_key, project_id="test_project", debug=debug, server_endpoint=server
     )
-    session_context = client.create_session()
+    session_context = client.create_session(device_id="test_device_id")
     async with session_context as session:
         await session._enqueue({"foo": "bar"})
     assert session.has_errors() is True
@@ -75,9 +89,9 @@ async def test_basic_event_success():
     if server is None:
         pytest.skip("SERVER_BASE environment variable is not set.")
     client = Client(
-        api_key=api_key, project_id="test_project", debug=True, server_endpoint=server
+        api_key=api_key, project_id="test_project", debug=debug, server_endpoint=server
     )
-    session_context = client.create_session()
+    session_context = client.create_session(device_id="test_device_id")
     async with session_context as session:
         await session.track_event(
             event="test_event",

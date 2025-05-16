@@ -81,7 +81,8 @@ class Session:
         self.conversation_id: str | None = None
         self.conversation_ids: List[str] = []
         self.attributes = attributes
-        self.user_id = config.user_id
+        self.id = config.id
+        self.device_id = config.device_id
         self.queue: Optional[asyncio.Queue] = None
         self.listen_task: Optional[asyncio.Task] = None
         self.http_client = HTTPClient(config=client, sessionConfig=config)
@@ -166,12 +167,11 @@ class Session:
         This method is a coroutine that sends a message indicating that the session has started.
         """
         attributes = self.attributes or {}
-        if self.user_id is not None:
-            if attributes.get("user_id") is None:
-                attributes["user_id"] = self.user_id
         message = StartSession(
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
+            id=self.id,
+            device_id=self.device_id,
             attributes=attributes,
         )
         await self._enqueue(message.model_dump(exclude_none=True))
@@ -241,7 +241,8 @@ class Session:
         timestamp: Optional[str] = None,
         session_id: Optional[str] = None,
         project_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        id: Optional[str] = None,
+        device_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> str:
         """Start the session.
@@ -254,7 +255,8 @@ class Session:
             session_id (str, optional): The ID of the session. If not provided, a new session ID will be generated.
             project_id (str, optional): The ID of the project. If not provided, the default project ID (from Client)
                                         will be used.
-            user_id (str, optional): The ID of the user, if known.
+            id (str, optional): The ID of the user, if known.
+            device_id (str, optional): The ID of the device associated with the user.
             attributes (dict, optional): Additional attributes associated with the session.
 
         Returns:
@@ -266,8 +268,10 @@ class Session:
             self.session_id = str(uuid.uuid4())
         if project_id is not None:
             self.project_id = project_id
-        if user_id is not None:
-            self.user_id = user_id
+        if id is not None:
+            self.id = id
+        if device_id is not None:
+            self.device_id = device_id
         if attributes is not None:
             self.attributes = attributes
         logger.debug(f"Starting session with ID: {self.session_id}")
@@ -381,7 +385,8 @@ class Session:
         self,
         *,
         timestamp: Optional[str] = None,
-        id: str,
+        id: Optional[str] = None,
+        device_id: Optional[str] = None,
         traits: Optional[Dict[str, Union[str, bool, int, float]]],
     ) -> None:
         """Identify a user with the given user ID and traits.
@@ -392,6 +397,7 @@ class Session:
         Args:
             timestamp (str, optional): The timestamp of the identify event. Defaults to the current UTC timestamp.
             id (str, optional): The ID of the user to identify.
+            device_id (str, optional): The ID of the device associated with the user.
             traits (dict, optional): Additional traits associated with the user.
         """
         if self.session_id is None:
@@ -400,6 +406,7 @@ class Session:
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
             id=id,
+            device_id=device_id,
             traits=traits or {},
         )
         await self._enqueue(message.model_dump(exclude_none=True))
