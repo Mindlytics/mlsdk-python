@@ -521,7 +521,7 @@ class Session:
         user: str,
         assistant: str,
         assistant_id: Optional[str] = None,
-        cost: Optional[Union[TokenBasedCost, Cost]] = None,
+        usage: Optional[Union[TokenBasedCost, Cost]] = None,
         properties: Optional[Dict[str, Union[str, bool, int, float]]] = None,
     ) -> None:
         """Track a turn in the conversation.
@@ -536,7 +536,7 @@ class Session:
             user (str): The user input in the conversation.
             assistant (str): The assistant output in the conversation.
             assistant_id (str, optional): The ID of the assistant.
-            cost (TokenBasedCost or Cost, optional): The cost associated with the conversation turn.
+            usage (TokenBasedCost or Cost, optional): The cost associated with the conversation turn.
             properties (dict, optional): Additional properties associated with the conversation turn.
         """
         if self.session_id is None:
@@ -555,7 +555,7 @@ class Session:
             user=user,
             assistant=assistant,
             assistant_id=assistant_id,
-            cost=cost,
+            usage=usage,
             **(properties or {}),
         )
         message = ConversationTurn(
@@ -571,7 +571,7 @@ class Session:
         *,
         timestamp: Optional[str] = None,
         conversation_id: Optional[str] = None,
-        cost: Union[TokenBasedCost, Cost],
+        usage: Union[TokenBasedCost, Cost],
     ) -> None:
         """Track the usage of the conversation.
 
@@ -582,7 +582,7 @@ class Session:
         Args:
             timestamp (str, optional): The timestamp of the conversation usage. Defaults to the current UTC timestamp.
             conversation_id (str, optional): The ID of the conversation associated with the event.
-            cost (TokenBasedCost or Cost, optional): The cost associated with the conversation usage.
+            usage (TokenBasedCost or Cost, optional): The cost associated with the conversation usage.
         """
         if self.session_id is None:
             await self.start_session(timestamp=timestamp)
@@ -600,6 +600,6 @@ class Session:
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
             conversation_id=str(conversation_id or self.conversation_id),
-            properties=cost,
+            properties=usage,
         )
         await self._enqueue(message.model_dump(exclude_none=True))

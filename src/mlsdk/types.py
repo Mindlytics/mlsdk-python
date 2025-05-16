@@ -218,7 +218,7 @@ class TurnPropertiesModel(BaseModel):
     user: str = Field(..., min_length=1, max_length=100)
     assistant: str = Field(..., min_length=1, max_length=100)
     assistant_id: Optional[str | None] = None
-    cost: Optional[Union[TokenBasedCost, Cost]] = None
+    usage: Optional[Union[TokenBasedCost, Cost]] = None
 
     # This enables additional properties of various types
     model_config = {"extra": "allow"}  # Allows additional fields beyond defined ones
@@ -227,7 +227,7 @@ class TurnPropertiesModel(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Post-initialization validation to ensure additional fields are of the correct type."""
         for field_name, value in self.__dict__.items():
-            if field_name not in ("user", "assistant", "assistant_id", "cost"):
+            if field_name not in ("user", "assistant", "assistant_id", "usage"):
                 if not isinstance(value, (str, int, float, bool)):
                     raise ValueError(
                         f"Field '{field_name}' must be a string, number, or boolean, got {type(value).__name__}"

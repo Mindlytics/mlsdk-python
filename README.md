@@ -364,9 +364,9 @@ Send a single "turn" of a conversation to the Mindlytics service for analysis.
 * assistant - (required, str) The assistant utterance.
 * assistant_id - (optional, None) An assistant id for the assistant, used to identify agents.
 * properties - (optional, dict) A dictionary of arbitrary properties you may want to associate with this conversation turn.
-* cost - (optional, None) Use this to track your conversational LLM costs.
+* usage - (optional, None) Use this to track your conversational LLM costs.
 
-You can optionally track your own conversational LLM costs in Mindlytics.  You can do this on a turn-by-turn basis using this method, or on a less granular basis using the method described below.  You can specify costs in one of two ways; if your LLM is a popular, known LLM you may send your model's name and the prompt and completion token counts, and Mindlytics will use an online database to look up the per-token costs for this model and do the math.  Or you may pass in an actual cost as a float, if you know it or are using a less popular LLM.  The "cost" property can be one of:
+You can optionally track your own conversational LLM costs in Mindlytics.  You can do this on a turn-by-turn basis using this method, or on a less granular basis using the method described below.  You can specify costs in one of two ways; if your LLM is a popular, known LLM you may send your model's name and the prompt and completion token counts, and Mindlytics will use an online database to look up the per-token costs for this model and do the math.  Or you may pass in an actual cost as a float, if you know it or are using a less popular LLM.  The "usage" property can be one of:
 
 ```python
 class TokenBasedCost(BaseModel):
