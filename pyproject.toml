@@ -3,7 +3,7 @@ name = "mlsdk-python"
 version = "1.0.0"
 description = ""
 authors = [
-    {name = "Andrew Peebles",email = "aqpeeb@gmail.com"}
+    {name = "Mindlytics",email = "info@mindlytics.ai"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"
