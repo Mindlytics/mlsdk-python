@@ -3,6 +3,9 @@ Mindlytics SDK Documentation
 
 Welcome to the documentation for the `Mindlytics Python SDK`.
 
+Version: |version| (Release: |release|)
+---------------------------------------
+
 Contents:
 
 .. toctree::
