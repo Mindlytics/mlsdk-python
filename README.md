@@ -42,7 +42,7 @@ User IDs are something you can decide to use or not use.  If you decide to use t
 
 ## Architecture
 
-The Mindlytics SDK is designed to have an absolute minimal impact on your application.  The SDK requires `asyncio` and uses an asynchronous queue to decouple your application from the actual communication with Mindlytics.  When you interact with the SDK your data gets pushed into an asynchronous FIFO and the SDK returns control to your application immediately.  In the background the SDK removes data from the queue and tries to send it to the Mindlytics service.  The SDK handles errors, and any timeouts, retries or rate limits as it tries to get the data to the server.  When your application exists there is a way to wait on the SDK to completely drain the queue so no data is lost.
+The Mindlytics SDK is designed to have an absolute minimal impact on your application.  The SDK requires `asyncio` and uses an asynchronous queue to decouple your application from the actual communication with Mindlytics.  When you interact with the SDK your data gets pushed into an asynchronous FIFO and the SDK returns control to your application immediately.  In the background the SDK removes data from the queue and tries to send it to the Mindlytics service.  The SDK handles errors, and any timeouts, retries or rate limits as it tries to get the data to the server.  When your application exits there is a way to wait on the SDK to completely drain the queue so no data is lost.
 
 ## Errors
 
