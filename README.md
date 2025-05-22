@@ -66,6 +66,8 @@ client = Client(...)
 session = client.create_session(err_callback=ml_error_reporter)
 ```
 
+Since your application is decoupled from the Mindlytics backend, you can only get communication errors this way.  Deeper errors that might happen on the Mindlytics backend while processing queued messages are not possible to get this way.  However, this SDK supports an optional websockets mechanism which you might choose to employ to receive these processing errors, and to receive Mindlytics generated events as they are generated.  See [Websocket Support](#websocket-support) below.
+
 ## Client API
 
 ```python
@@ -80,6 +82,8 @@ client = Client(api_key="KEY", project_id="ID")
 * project_id - The ID of a project in your workspace.  Used to create sessions.
 * debug (optional, False) - Enable to turn on logging.
 * server_endpoint (optional) - Use a different endpoint for the Mindlytics server.
+
+You can set environment variables for `MLSDK_API_KEY` and `MLSDK_PROJECT_ID` which will be used unless you supply the value to the constructor.
 
 **Returns:**
 
@@ -200,7 +204,6 @@ Using those two methods makes using the SDK pretty easy but does not give you co
 
 **Arguments:**
 
-* project_id - (optional, None) If specified, will overwrite the value given when creating the client.
 * id - (optional, None) If the user id for this session is known, you can pass it here.
 * device_id - (optional, None) A device id.  If user id is not passed, then device_id is required.
 * attributes - (optional, None) Can pass a dictionary of str|int|float|bool of custom attributes.
@@ -220,7 +223,6 @@ To send events to Mindlytics you must start a session.  In some cases, this sess
 
 * session_id - (optional, None) You can supply your own globally unique session id.  If you do not, then a uuid string is created by the SDK.
 * timestamp - (optional, None) If importing past data you can specify a timestamp for the creation of this session.
-* project_id - (optional, None) The project_id for this session.  Defaults to the project_id passed to the Mindlytics client.
 * id - (optional, None) The user id for this session, if you know it.  Otherwise an anonymous user will be created.
 * device_id - (optional, None) A unique device id.  If user id is not passed, then device_id is required.
 * attributes - (optional, None) A dictionary of arbitrary attributes you may want to associated with this session.
@@ -283,7 +285,7 @@ If the user involved in a session becomes know during the session, or if the use
 * traits - (optional, None) - A dict of user traits.
 
 ```python
-await sessuin.user_alias(
+await session.user_alias(
     id="jjacob",
     previous_id="JJ@mail.com",
 )
@@ -403,3 +405,30 @@ Use this method to track your own LLM costs.
 * timestamp - (optional, None) If importing past data you can specify a timestamp for this event.
 * conversation_id - (optional, None) The conversation id for this usage.  Defaults to current conversation.
 * cost: (required, Union[TokenBasedCost, Cost]) - A cost to be added to the conversation cost so far.
+
+## HTTPClient
+
+There is a class you can use to communicate with the raw Mindlytics backend service endpoints.
+
+```python
+from mlsdk import HTTPClient
+
+client = HTTPClient(
+    api_key="YOUR_WORKSPACE_API_KEY",
+    project_id="YOUR_PROJECT_ID",
+)
+
+response = await send_request(
+    url="/bc/v1/events/queue",
+    method="POST",
+    data={
+        # your data
+    }
+)
+
+# The response is a dictionary
+```
+
+## Websocket Support
+
+| TBD

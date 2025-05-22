@@ -60,6 +60,9 @@ async def test_create_session():
     await session_context.end_session()
     assert session_context.has_errors() is False
 
+    # wait a few seconds for mindlytics to process this event with its llms
+    await asyncio.sleep(2)
+
     # fetch the session
     session = await fetch(
         api_key=api_key,

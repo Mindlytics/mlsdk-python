@@ -85,7 +85,12 @@ class Session:
         self.device_id = config.device_id
         self.queue: Optional[asyncio.Queue] = None
         self.listen_task: Optional[asyncio.Task] = None
-        self.http_client = HTTPClient(config=client, sessionConfig=config)
+        self.http_client = HTTPClient(
+            server_endpoint=client.server_endpoint,
+            api_key=client.api_key,
+            project_id=self.project_id,
+            debug=client.debug,
+        )
         self.err_callback = err_callback
         if client.debug is True:
             logger.setLevel(logging.DEBUG)
@@ -130,14 +135,14 @@ class Session:
             if message.get("test") is None:
                 response = await self.http_client.send_request(
                     method="POST",
-                    url="/bc/v1/events/event",
+                    url="/bc/v1/events/queue",
                     data=message,
                 )
-                if response.errored:
-                    self.history.append(response)
+                if response.get("errored", False):
+                    self.history.append(APIResponse.model_validate(response))
                     self.errors += 1
                     if self.err_callback is not None:
-                        self.err_callback(response)
+                        self.err_callback(APIResponse.model_validate(response))
             self.queue.task_done()
         logger.debug(
             f"Finished processing messages in session with ID: {self.session_id}"
@@ -240,7 +245,6 @@ class Session:
         *,
         timestamp: Optional[str] = None,
         session_id: Optional[str] = None,
-        project_id: Optional[str] = None,
         id: Optional[str] = None,
         device_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
@@ -253,8 +257,6 @@ class Session:
         Args:
             timestamp (str, optional): The timestamp of the session start. Defaults to the current UTC timestamp.
             session_id (str, optional): The ID of the session. If not provided, a new session ID will be generated.
-            project_id (str, optional): The ID of the project. If not provided, the default project ID (from Client)
-                                        will be used.
             id (str, optional): The ID of the user, if known.
             device_id (str, optional): The ID of the device associated with the user.
             attributes (dict, optional): Additional attributes associated with the session.
@@ -266,8 +268,6 @@ class Session:
             self.session_id = session_id
         if self.session_id is None:
             self.session_id = str(uuid.uuid4())
-        if project_id is not None:
-            self.project_id = project_id
         if id is not None:
             self.id = id
         if device_id is not None:

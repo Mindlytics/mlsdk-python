@@ -23,14 +23,16 @@ class ClientConfig(BaseModel):
     Attributes:
         api_key (str): The organization API key used for authentication.
         project_id (str): The default project ID used to create sessions.
-        server_endpoint (str, optional): The URL of the Mindlytics API. Defaults to the production endpoint.
-        debug (bool, optional): Enable debug logging if True.
+        server_endpoint (str): The URL of the Mindlytics API. Defaults to the production endpoint.
+        wss_endpoint (str): The URL of the Mindlytics WebSocket API. Defaults to the production endpoint.
+        debug (bool): Enable debug logging if True.
     """
 
     api_key: str
     project_id: str
-    server_endpoint: Optional[str] = None
-    debug: bool = False
+    server_endpoint: str
+    wss_endpoint: str
+    debug: bool
 
 
 # Arguments to Client().create_session() method
@@ -42,7 +44,7 @@ class SessionConfig(BaseModel):
         id (str, optional): The ID of the user associated with the session.
     """
 
-    project_id: Optional[str] = None
+    project_id: str
     id: Optional[str] = None
     device_id: Optional[str] = None
 
@@ -260,3 +262,20 @@ class ConversationUsage(BaseEvent):
     event: str = Field(default=EVENT_CONVERSATION_USAGE)
     properties: Union[TokenBasedCost, Cost]
     conversation_id: str
+
+
+class MLEvent(BaseModel):
+    """Event class for Mindlytics events coming from the websocket."""
+
+    organization_id: str
+    app_id: str
+    session_id: str
+    user_id: str
+    conversation_id: Optional[str] = None
+    event_id: str
+    timestamp: str
+    event: str
+    properties: Dict[
+        str, Union[str, bool, int, float, list[str], list[bool], list[int], list[float]]
+    ]
+    user_traits: Dict[str, Union[str, bool, int, float]]

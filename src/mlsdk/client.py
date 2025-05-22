@@ -1,10 +1,13 @@
 """Client module for Mindlytics SDK."""
 
-from typing import Optional, Dict, Union, Callable, Any
+import asyncio
+from typing import Optional, Dict, Union, Callable, Any, Awaitable
 import logging
-from .types import ClientConfig, SessionConfig, APIResponse
+import os
+from .types import ClientConfig, SessionConfig, APIResponse, MLEvent
 from .session import Session
 from .httpclient import HTTPClient
+from .ws import WS
 
 logger = logging.getLogger(__name__)  # Use module name
 
@@ -18,9 +21,10 @@ class Client:
     def __init__(
         self,
         *,
-        api_key: str,
-        project_id: str,
+        api_key: Optional[str] = None,
+        project_id: Optional[str] = None,
         server_endpoint: Optional[str] = None,
+        wss_endpoint: Optional[str] = None,
         debug: bool = False,
     ) -> None:
         """Initialize the Client with the given parameters.
@@ -34,22 +38,34 @@ class Client:
         Once you have an instance of this class, you can create sessions using the `create_session` method.
 
         Args:
-            api_key (str): The organization API key used for authentication.
-            project_id (str): The default project ID used to create sessions.
+            api_key (str, optional): The organization API key used for authentication.
+            project_id (str, optional): The default project ID used to create sessions.
             server_endpoint (str, optional): The URL of the Mindlytics API. Defaults to the production endpoint.
+            wss_endpoint (str, optional): The URL of the Mindlytics WebSocket API. Defaults to the production endpoint.
             debug (bool, optional): Enable debug logging if True.
         """
+        if api_key is None and os.getenv("MLSDK_API_KEY") is None:
+            raise ValueError(
+                "API key must be provided either as an argument or through the environment variable 'MLSDK_API_KEY'"
+            )
+        if project_id is None and os.getenv("MLSDK_PROJECT_ID") is None:
+            raise ValueError(
+                "Project ID must be provided either as an argument or through the environment variable 'MLSDK_PROJECT_ID'"
+            )
         config = ClientConfig(
-            api_key=api_key,
-            project_id=project_id,
-            server_endpoint=server_endpoint,
+            api_key=str(api_key or os.getenv("MLSDK_API_KEY")),
+            project_id=str(project_id or os.getenv("MLSDK_PROJECT_ID")),
+            server_endpoint=server_endpoint or "https://app.mindlytics.ai",
+            wss_endpoint=wss_endpoint or "wss://wss.mindlytics.ai",
             debug=debug,
         )
         self.config = config
         self.api_key = config.api_key
-        self.server_endpoint = config.server_endpoint or "https://app.mindlytics.ai"
+        self.server_endpoint = config.server_endpoint
+        self.wss_endpoint = wss_endpoint
         self.debug = config.debug
-
+        self.ws = None  # type: Optional[WS]
+        self.listener = None  # type: Optional[asyncio.Task[None]]
         if self.debug is True:
             logger.setLevel(logging.DEBUG)
         else:
@@ -60,7 +76,6 @@ class Client:
     def create_session(
         self,
         *,
-        project_id: Optional[str] = None,
         id: Optional[str] = None,
         device_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
@@ -73,7 +88,6 @@ class Client:
         be used.  Pass a id to associate the session with a specific user if you know the user.
 
         Args:
-            project_id (str, optional): The ID of the project.
             id (str, optional): The ID of the user.
             device_id (str, optional): The device ID associated with the user.
             attributes (dict, optional): A dictionary of attributes associated with the session.
@@ -83,7 +97,7 @@ class Client:
             Session: A new session object.
         """
         config = SessionConfig(
-            project_id=project_id or self.config.project_id,
+            project_id=self.config.project_id,
             id=id,
             device_id=device_id,
         )
@@ -118,11 +132,10 @@ class Client:
             traits (dict, optional): A dictionary of traits associated with the user.
         """
         client = HTTPClient(
-            config=self.config,
-            sessionConfig=SessionConfig(
-                project_id=self.config.project_id,
-                id=id,
-            ),
+            server_endpoint=self.server_endpoint,
+            api_key=self.api_key,
+            project_id=self.config.project_id,
+            debug=self.debug,
         )
 
         data: Dict[str, Any] = {}
@@ -147,8 +160,8 @@ class Client:
             url="/bc/v1/user/identify",
             data=data,
         )
-        if response.errored:
-            raise Exception(f"Error identifying user: {response.message}")
+        if response.get("errored", False):
+            raise Exception(f"Error identifying user: {response.get('message')}")
         if id is not None:
             logger.debug(f"User identified: {id} with traits: {traits}")
         else:
@@ -176,11 +189,10 @@ class Client:
             previous_id (str): The previous ID to associate with the user.
         """
         client = HTTPClient(
-            config=self.config,
-            sessionConfig=SessionConfig(
-                project_id=self.config.project_id,
-                id=id,
-            ),
+            server_endpoint=self.server_endpoint,
+            api_key=self.api_key,
+            project_id=self.config.project_id,
+            debug=self.debug,
         )
         data = {
             "id": id,
@@ -191,6 +203,68 @@ class Client:
             url="/bc/v1/user/alias",
             data=data,
         )
-        if response.errored:
-            raise Exception(f"Error aliasing user: {response.message}")
+        if response.get("errored", False):
+            raise Exception(f"Error aliasing user: {response.get('message')}")
         logger.debug(f"User {id} aliased to {previous_id}")
+
+    async def start_listening(
+        self,
+        *,
+        on_event: Callable[[MLEvent], Awaitable[None]],
+        on_error: Optional[Callable[[Exception], Awaitable[None]]] = None,
+    ) -> None:
+        """Start listening for events from the Mindlytics API.
+
+        This method sets up a WebSocket connection to the Mindlytics API and listens for events.  When an event is
+        received, the `on_event` callback is called with the event data.  If an error occurs, the `on_error` callback
+        is called with the error.
+
+        You must run this function something like this:
+        ```python
+        asyncio.create_task(client.listen_for_events(...))
+        ```
+
+        Args:
+            on_event (callable): A callback function to handle incoming events.
+            on_error (callable, optional): A callback function to handle errors.
+        """
+        self.ws = WS(config=self.config)
+        response = await self.ws.get_authorization_token()
+        if response.get("errored", False):
+            raise Exception(response.get("message"))
+        authorization_key = response.get("authorization_key")
+        if authorization_key is None:
+            raise Exception("Unable to obtain authorization key")
+        logger.debug("Starting WebSocket listener...")
+
+        # The following stuff is like new Promise(resolve, reject) in JS
+        # It will resolve when the connection is established and the listener is started
+        connected_future = asyncio.get_event_loop().create_future()
+
+        def on_connected():
+            logger.debug("WebSocket connection established")
+            connected_future.set_result(True)
+
+        self.listener = asyncio.create_task(
+            self.ws.listen_for_events(
+                authorization_key=authorization_key,
+                on_event=on_event,
+                on_error=on_error,
+                on_connected=on_connected,
+            )
+        )
+        await connected_future
+
+    async def stop_listening(self) -> None:
+        """Stop listening for events from the Mindlytics API.
+
+        This method closes the WebSocket connection to the Mindlytics API and stops listening for events.
+        """
+        if self.ws is not None:
+            if self.listener is not None:
+                self.listener.cancel()
+                try:
+                    await self.listener
+                except asyncio.CancelledError:
+                    pass
+                self.listener = None

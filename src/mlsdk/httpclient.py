@@ -3,7 +3,7 @@
 import aiohttp
 import logging
 import backoff
-from .types import ClientConfig, SessionConfig, APIResponse
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)  # Use module name
 
@@ -14,29 +14,44 @@ class HTTPClient:
     This class provides methods to send requests to the backend API.
 
     Attributes:
-        config (ClientConfig): The configuration for the HTTP client.
-        headers (dict): The headers to be used in the HTTP requests.
+        api_key (str): The organization API key used for authentication.
+        project_id (str): The default project ID used to create sessions.
+        config (dict): Configuration for the HTTP client.
+        headers (dict): Headers for the HTTP requests.
     """
 
-    def __init__(self, *, config: ClientConfig, sessionConfig: SessionConfig) -> None:
+    def __init__(
+        self,
+        *,
+        server_endpoint: Optional[str] = None,
+        api_key: str,
+        project_id: str,
+        debug: bool,
+    ) -> None:
         """Initialize the HTTP client with the given configuration.
 
         Args:
-            config (ClientConfig): The configuration for the HTTP client.
-            sessionConfig (SessionConfig): The configuration for the session.
+            server_endpoint (str): The URL of the Mindlytics API.
+            api_key (str): The organization API key used for authentication.
+            project_id (str): The default project ID used to create sessions.
+            debug (bool, optional): Enable debug logging if True.
         """
-        self.config = config
+        self.api_key = api_key
+        self.project_id = project_id
+        self.server_endpoint = server_endpoint or "https://app.mindlytics.ai"
         self.headers = {
-            "Authorization": f"Bearer {self.config.api_key}",
-            "X-App-ID": str(sessionConfig.project_id),
+            "Authorization": f"Bearer {self.api_key}",
+            "X-App-ID": self.project_id,
         }
-        if self.config.debug is True:
+        if debug is True:
             logger.setLevel(logging.DEBUG)
         else:
             logger.setLevel(logging.WARNING)
 
     @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_time=60)
-    async def send_request(self, *, method: str, url: str, data: dict) -> APIResponse:
+    async def send_request(
+        self, *, method: str, url: str, data: dict
+    ) -> Dict[str, Any]:
         """Send an HTTP request to the Mindlytics API.
 
         Args:
@@ -48,20 +63,26 @@ class HTTPClient:
             APIResponse: The response from the API.
         """
         async with aiohttp.ClientSession() as session:
+            request_args: Dict[str, Any] = {
+                "headers": self.headers,
+                "timeout": aiohttp.ClientTimeout(total=60),
+            }
+            if method in ["POST", "PUT", "PATCH"]:
+                request_args["json"] = data
+            elif method == "GET":
+                request_args["params"] = data
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
+
             async with session.request(
                 method,
-                f"{self.config.server_endpoint}{url}",
-                headers=self.headers,
-                json=data,
+                f"{self.server_endpoint}{url}",
+                **request_args,
             ) as response:
                 if response.status != 200:
-                    return APIResponse(
-                        errored=True,
-                        status=response.status,
-                        message=f"Error: {response.status} - {await response.text()}",
-                    )
-                return APIResponse(
-                    errored=False,
-                    status=response.status,
-                    message=await response.text(),
-                )
+                    return {
+                        "errored": True,
+                        "status": response.status,
+                        "message": f"Error: {response.status} - {await response.text()}",
+                    }
+                return await response.json()
