@@ -80,6 +80,8 @@ class Client:
         device_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
         err_callback: Optional[Callable[[APIResponse], None]] = None,
+        on_event: Optional[Callable[[MLEvent], Awaitable[None]]] = None,
+        on_error: Optional[Callable[[Exception], Awaitable[None]]] = None,
     ) -> Session:
         """Create a new session with the given parameters.
 
@@ -92,6 +94,8 @@ class Client:
             device_id (str, optional): The device ID associated with the user.
             attributes (dict, optional): A dictionary of attributes associated with the session.
             err_callback (callable, optional): A callback function to handle errors.
+            on_event (callable, optional): A callback function to handle incoming events.
+            on_error (callable, optional): A callback function to handle errors.
 
         Returns:
             Session: A new session object.
@@ -106,6 +110,8 @@ class Client:
             config=config,
             attributes=attributes,
             err_callback=err_callback,
+            on_event=on_event,
+            on_error=on_error,
         )
 
     async def user_identify(

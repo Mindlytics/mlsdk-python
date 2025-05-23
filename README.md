@@ -13,7 +13,7 @@ async def main():
         api_key="YOUR_WORKSPACE_API_KEY",
         project_id="YOUR_PROJECT_ID",
     )
-    session_context = client.create_session()
+    session_context = client.create_session(device_id="test_device_id")
     # use as a context manager
     async with session_context as session:
         await session.track_conversation_turn(
@@ -431,4 +431,37 @@ response = await send_request(
 
 ## Websocket Support
 
-| TBD
+While your application code is decoupled from the Mindlytics service in terms of sending events, it is possible to receive the events you send as well as the analytics events that Mindlytics generates over a websocket connection.  You can do this by registering callback handlers when you create a new session.
+
+```python
+from mlsdk import Client, MLEvent
+
+async def main():
+    client = Client(
+        api_key="YOUR_WORKSPACE_API_KEY",
+        project_id="YOUR_PROJECT_ID",
+    )
+
+    async def on_event(event: MLEvent) -> None:
+        print(f"Received event: {event}")
+
+    async def on_error(error: Exception) -> None:
+        print(f"Error: {error}")
+
+    session_context = client.create_session(
+        device_id="test_device_id",
+        on_event=on_event,
+        on_error=on_error,
+    )
+
+    async with session_context as session:
+        await session.track_conversation_turn(
+            user="I would like book an airline flight to New York.",
+            assistant="No problem!  When would you like to arrive?",
+        )
+    # leaving the context will automatically flush any pending data in the queue and wait until
+    # everything has been sent.  Because you registered callbacks for websockets, the websocket connection
+    # will wait until a "Session Ended" event arrives, and then close down the websocket connection.
+
+asyncio.run(main())
+```

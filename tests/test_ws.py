@@ -72,12 +72,16 @@ async def test_create_handler():
         logger.error(f"Error: {error}")
         errors.append(error)
 
-    await client.start_listening(
+    # await client.start_listening(
+    #    on_event=on_event,
+    #    on_error=on_error,
+    # )
+
+    session_context = client.create_session(
+        device_id="test_device_id",
         on_event=on_event,
         on_error=on_error,
     )
-
-    session_context = client.create_session(device_id="test_device_id")
     async with session_context as session:
         await session.track_event(
             event="test_event",
@@ -98,7 +102,7 @@ async def test_create_handler():
             logger.error("Timeout waiting for events")
             break
 
-    await client.stop_listening()
+    # await client.stop_listening()
     assert len(events) == 3
     assert len(errors) == 0
     assert events[0].event == "Session Started"

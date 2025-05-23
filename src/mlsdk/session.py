@@ -19,11 +19,13 @@ from .types import (
     TokenBasedCost,
     Cost,
     TurnPropertiesModel,
+    MLEvent,
 )
 
-from typing import Optional, List, Dict, Union, Callable
+from typing import Optional, List, Dict, Union, Callable, Awaitable
 from .httpclient import HTTPClient
 from datetime import datetime, timezone
+from .ws import WS
 
 logger = logging.getLogger(__name__)  # Use module name
 
@@ -66,6 +68,8 @@ class Session:
         config: SessionConfig,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
         err_callback: Optional[Callable[[APIResponse], None]] = None,
+        on_event: Optional[Callable[[MLEvent], Awaitable[None]]] = None,
+        on_error: Optional[Callable[[Exception], Awaitable[None]]] = None,
     ) -> None:
         """Initialize the Session with the given parameters.
 
@@ -74,6 +78,8 @@ class Session:
             config (SessionConfig): The configuration for the session.
             attributes (dict, optional): Additional attributes associated with the session.
             err_callback (callable, optional): A callback function to handle errors.
+            on_event (callable, optional): A callback function to handle events.
+            on_error (callable, optional): A callback function to handle errors.
         """
         self.client = client
         self.session_id: str | None = None
@@ -98,6 +104,11 @@ class Session:
             logger.setLevel(logging.WARNING)
         self.history: List[APIResponse] = []
         self.errors = 0
+        self.on_error = on_error
+        self.on_event = on_event
+        self.ws = None  # type: Optional[WS]
+        self.listener = None  # type: Optional[asyncio.Task[None]]
+        self.seen_session_end = False
 
     async def __aenter__(self) -> "Session":
         """Enter the runtime context related to this object.
@@ -274,6 +285,12 @@ class Session:
             self.device_id = device_id
         if attributes is not None:
             self.attributes = attributes
+        if self.on_event is not None:
+            await self.start_listening(
+                session_id=self.session_id,
+                on_event=self.on_event,
+                on_error=self.on_error,
+            )
         logger.debug(f"Starting session with ID: {self.session_id}")
         if self.queue is None:
             self.queue = asyncio.Queue()
@@ -318,6 +335,8 @@ class Session:
         if self.listen_task is not None:
             await self.listen_task
         self.listen_task = None
+        if self.on_error is not None:
+            await self.stop_listening()
 
     def has_errors(self) -> bool:
         """Check if there are any errors in the session.
@@ -603,3 +622,101 @@ class Session:
             properties=usage,
         )
         await self._enqueue(message.model_dump(exclude_none=True))
+
+    async def start_listening(
+        self,
+        *,
+        session_id: str,
+        on_event: Callable[[MLEvent], Awaitable[None]],
+        on_error: Optional[Callable[[Exception], Awaitable[None]]] = None,
+    ) -> None:
+        """Start listening for events from the Mindlytics API.
+
+        This method sets up a WebSocket connection to the Mindlytics API and listens for events.  When an event is
+        received, the `on_event` callback is called with the event data.  If an error occurs, the `on_error` callback
+        is called with the error.
+
+        Args:
+            session_id (str): The ID of the session to listen for events.
+            on_event (callable): A callback function to handle incoming events.
+            on_error (callable, optional): A callback function to handle errors.
+        """
+        self.ws = WS(config=self.client)
+        response = await self.ws.get_authorization_token(session_id=session_id)
+        if response.get("errored", False):
+            raise Exception(response.get("message"))
+        authorization_key = response.get("authorization_key")
+        if authorization_key is None:
+            raise Exception("Unable to obtain authorization key")
+        logger.debug("Starting WebSocket listener...")
+
+        # The following stuff is like new Promise(resolve, reject) in JS
+        # It will resolve when the connection is established and the listener is started
+        connected_future = asyncio.get_event_loop().create_future()
+
+        def on_connected():
+            logger.debug("WebSocket connection established")
+            connected_future.set_result(True)
+
+        async def _on_event(event: MLEvent) -> None:
+            if on_event is not None:
+                await on_event(event)
+                if (
+                    event.event == "Session Ended"
+                    and event.session_id == self.session_id
+                ):
+                    logger.debug(
+                        f"Session ended event received for session ID: {event.session_id}"
+                    )
+                    self.seen_session_end = True
+            else:
+                if (
+                    event.event == "Session Ended"
+                    and event.session_id == self.session_id
+                ):
+                    logger.debug(
+                        f"Session ended event received for session ID: {event.session_id}"
+                    )
+                    self.seen_session_end = True
+
+        self.listener = asyncio.create_task(
+            self.ws.listen_for_events(
+                authorization_key=authorization_key,
+                on_event=_on_event,
+                on_error=on_error,
+                on_connected=on_connected,
+            )
+        )
+        await connected_future
+
+    async def stop_listening(self) -> None:
+        """Stop listening for events from the Mindlytics API.
+
+        This method closes the WebSocket connection to the Mindlytics API and stops listening for events.
+        """
+        if self.ws is not None:
+            if self.listener is not None:
+                # Before we stop the listener, we should make sure the Session Ended event is sent
+                if not self.seen_session_end:
+                    attempts = 30
+                    while not self.seen_session_end and attempts > 0:
+                        logger.debug(
+                            f"Waiting for session end event to be sent... {attempts} attempts left"
+                        )
+                        await asyncio.sleep(1)
+                        attempts -= 1
+                if self.seen_session_end:
+                    logger.debug(
+                        f"Session end event sent, stopping listener for session ID: {self.session_id}"
+                    )
+                else:
+                    logger.debug(
+                        f"Session end event not sent, stopping listener for session ID: {self.session_id}"
+                    )
+                self.listener.cancel()
+                try:
+                    await self.listener
+                except asyncio.CancelledError:
+                    pass
+                self.listener = None
+            self.ws = None
