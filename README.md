@@ -465,3 +465,7 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Helpers
+
+The Mindlytics SDK comes with some built in "helpers" to make integrating the SDK easier with some popular AI frameworks.  See the "examples" directory for ideas of how to take advantage of these helpers.
