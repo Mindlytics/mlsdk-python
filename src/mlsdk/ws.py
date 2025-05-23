@@ -111,7 +111,7 @@ class WS:
         headers = [("Authorization", f"Bearer {authorization_key}")]
 
         async def log_error(error: Exception) -> None:
-            logger.error(str(error))
+            logger.error(f"Mindlytics Error: {str(error)}")
             if on_error:
                 await on_error(error)
 
@@ -121,8 +121,20 @@ class WS:
                     on_connected()
                 try:
                     async for message in websocket:
-                        event = json.loads(message)
-                        await on_event(MLEvent(**event))
+                        try:
+                            event = json.loads(message)
+                            e = MLEvent(**event)
+                            if e.event == "MLError":
+                                error_message = (
+                                    e.properties.get("error_message", "Unknown error")
+                                    if e.properties and isinstance(e.properties, dict)
+                                    else "Unknown error"
+                                )
+                                await log_error(Exception(error_message))
+                            else:
+                                await on_event(e)
+                        except Exception as e:
+                            await log_error(e)
                 except asyncio.CancelledError:
                     pass
                 except websockets.exceptions.ConnectionClosedError:

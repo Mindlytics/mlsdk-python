@@ -217,10 +217,13 @@ class Cost(BaseModel):
 class TurnPropertiesModel(BaseModel):
     """Properties associated with a turn in a conversation."""
 
-    user: str = Field(..., min_length=1, max_length=100)
-    assistant: str = Field(..., min_length=1, max_length=100)
+    user: str
+    assistant: str
     assistant_id: Optional[str | None] = None
-    usage: Optional[Union[TokenBasedCost, Cost]] = None
+    cost: Optional[float | None] = None
+    model: Optional[str | None] = None
+    prompt_tokens: Optional[int | None] = None
+    completion_tokens: Optional[int | None] = None
 
     # This enables additional properties of various types
     model_config = {"extra": "allow"}  # Allows additional fields beyond defined ones
@@ -229,7 +232,15 @@ class TurnPropertiesModel(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Post-initialization validation to ensure additional fields are of the correct type."""
         for field_name, value in self.__dict__.items():
-            if field_name not in ("user", "assistant", "assistant_id", "usage"):
+            if field_name not in (
+                "user",
+                "assistant",
+                "assistant_id",
+                "cost",
+                "model",
+                "prompt_tokens",
+                "completion_tokens",
+            ):
                 if not isinstance(value, (str, int, float, bool)):
                     raise ValueError(
                         f"Field '{field_name}' must be a string, number, or boolean, got {type(value).__name__}"
@@ -267,15 +278,19 @@ class ConversationUsage(BaseEvent):
 class MLEvent(BaseModel):
     """Event class for Mindlytics events coming from the websocket."""
 
-    organization_id: str
-    app_id: str
+    organization_id: Optional[str] = None
+    app_id: Optional[str] = None
     session_id: str
-    user_id: str
+    user_id: Optional[str] = None
     conversation_id: Optional[str] = None
-    event_id: str
+    event_id: Optional[str] = None
+    origin_event_id: Optional[str] = None
     timestamp: str
     event: str
-    properties: Dict[
-        str, Union[str, bool, int, float, list[str], list[bool], list[int], list[float]]
-    ]
-    user_traits: Dict[str, Union[str, bool, int, float]]
+    properties: Optional[
+        Dict[
+            str,
+            Union[str, bool, int, float, list[str], list[bool], list[int], list[float]],
+        ]
+    ] = None
+    user_traits: Optional[Dict[str, Union[str, bool, int, float]]] = None

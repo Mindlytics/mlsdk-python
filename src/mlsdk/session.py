@@ -567,16 +567,29 @@ class Session:
         if conversation_id is not None:
             if self.conversation_id is None:
                 self.conversation_id = await self.start_conversation(
-                    timestamp=timestamp
+                    conversation_id=conversation_id, timestamp=timestamp
                 )
+
+        if self.conversation_id is None:
+            self.conversation_id = await self.start_conversation(timestamp=timestamp)
 
         p = TurnPropertiesModel(
             user=user,
             assistant=assistant,
             assistant_id=assistant_id,
-            usage=usage,
-            **(properties or {}),
         )
+        if properties:
+            for k, v in properties.items():
+                setattr(p, k, v)
+
+        if usage:
+            if isinstance(usage, TokenBasedCost):
+                p.model = usage.model
+                p.prompt_tokens = usage.prompt_tokens
+                p.completion_tokens = usage.completion_tokens
+            elif isinstance(usage, Cost):
+                p.cost = usage.cost
+
         message = ConversationTurn(
             timestamp=timestamp or _utc_timestamp(),
             session_id=str(self.session_id),
@@ -612,8 +625,11 @@ class Session:
         if conversation_id is not None:
             if self.conversation_id is None:
                 self.conversation_id = await self.start_conversation(
-                    timestamp=timestamp
+                    conversation_id=conversation_id, timestamp=timestamp
                 )
+
+        if self.conversation_id is None:
+            self.conversation_id = await self.start_conversation(timestamp=timestamp)
 
         message = ConversationUsage(
             timestamp=timestamp or _utc_timestamp(),
