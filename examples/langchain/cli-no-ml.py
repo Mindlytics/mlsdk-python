@@ -19,28 +19,6 @@ class AsyncStreamingCallbackHandler(AsyncCallbackHandler):
         """Called when a new token is generated."""
         print(token, end="", flush=True)
 
-    async def on_chat_model_start(
-        self,
-        serialized,
-        messages,
-        *,
-        run_id,
-        parent_run_id=None,
-        tags=None,
-        metadata=None,
-        **kwargs,
-    ):
-        """Called when the chat model starts."""
-        print("Chat model started with messages:", messages)
-        for message in reversed(messages[0]):
-            if isinstance(message, HumanMessage):
-                print()
-                print()
-                print("User input:", message.content)
-                print()
-                print()
-                break
-
 
 def initialize_llm():
     """Initialize the ChatOpenAI model with async streaming enabled."""
