@@ -469,3 +469,31 @@ asyncio.run(main())
 ## Helpers
 
 The Mindlytics SDK comes with some built in "helpers" to make integrating the SDK easier with some popular AI frameworks.  See the "examples" directory for ideas of how to take advantage of these helpers.
+
+## Examples
+
+```sh
+poetry run python -m ipykernel install --user --name=mindlytics --display-name "Mindlytics Python SDK"
+```
+
+On a mac, this command reported: `Installed kernelspec mindlytics in $HOME/Library/Jupyter/kernels/mindlytics`.
+
+You should create a file named `.env.examples` with some key environment variables that are required by the demos, something like this (with your real values of course):
+
+```sh
+OPENAI_API_KEY="yours"
+MLSDK_API_KEY="yours"
+MLSDK_PROJECT_ID="yours"
+```
+
+And if you are using a non-standard Mindlytics backend, add
+
+```sh
+MLSDK_SERVER_BASE="http://localhost:3000"
+```
+
+Then execute:
+
+```sh
+eval `cat .env.examples` poetry run jupyter lab examples
+```

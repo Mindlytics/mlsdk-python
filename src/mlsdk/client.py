@@ -4,6 +4,7 @@ import asyncio
 from typing import Optional, Dict, Union, Callable, Any, Awaitable
 import logging
 import os
+import re
 from .types import ClientConfig, SessionConfig, APIResponse, MLEvent
 from .session import Session
 from .httpclient import HTTPClient
@@ -52,11 +53,27 @@ class Client:
             raise ValueError(
                 "Project ID must be provided either as an argument or through the environment variable 'MLSDK_PROJECT_ID'"
             )
+
+        ep = (
+            server_endpoint
+            or os.getenv("MLSDK_SERVER_BASE")
+            or "https://app.mindlytics.ai"
+        )
+        ws = wss_endpoint
+        if ws is None:
+            ws = re.sub(r"^http", "ws", ep)
+            ws = re.sub(r"//app", "wss", ws)
+            # to handle localhost
+            ws = re.sub(r":300", ":400", ws)
+
+        logger.debug(f"Using server endpoint: {ep}")
+        logger.debug(f"Using websocket endpoint: {ws}")
+
         config = ClientConfig(
             api_key=str(api_key or os.getenv("MLSDK_API_KEY")),
             project_id=str(project_id or os.getenv("MLSDK_PROJECT_ID")),
-            server_endpoint=server_endpoint or "https://app.mindlytics.ai",
-            wss_endpoint=wss_endpoint or "wss://wss.mindlytics.ai",
+            server_endpoint=ep,
+            wss_endpoint=ws,
             debug=debug,
         )
         self.config = config

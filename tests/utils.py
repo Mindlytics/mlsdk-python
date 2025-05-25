@@ -12,7 +12,7 @@ async def get_api_key(organization_id: str) -> str:
     Returns:
         str: The API key associated with the organization ID.
     """
-    server = os.getenv("SERVER_BASE")
+    server = os.getenv("MLSDK_SERVER_BASE")
     super = os.getenv("SUPER_API_KEY")
     async with aiohttp.ClientSession() as session:
         async with session.request(
@@ -33,7 +33,7 @@ async def cleanup() -> dict:
     This function is a placeholder for any cleanup operations that need to be performed
     after running tests. Currently, it does not perform any actions.
     """
-    server = os.getenv("SERVER_BASE")
+    server = os.getenv("MLSDK_SERVER_BASE")
     super = os.getenv("SUPER_API_KEY")
     async with aiohttp.ClientSession() as session:
         async with session.request(
@@ -78,7 +78,7 @@ async def fetch(
     Returns:
         dict: The fetched data.
     """
-    server = os.getenv("SERVER_BASE")
+    server = os.getenv("MLSDK_SERVER_BASE")
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",

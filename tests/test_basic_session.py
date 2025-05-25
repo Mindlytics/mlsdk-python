@@ -11,7 +11,7 @@ debug = False
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)  # Use module name
 
-server = os.getenv("SERVER_BASE")
+server = os.getenv("MLSDK_SERVER_BASE")
 api_key = None
 session_id = None
 

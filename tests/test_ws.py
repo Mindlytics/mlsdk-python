@@ -11,8 +11,7 @@ debug = True
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)  # Use module name
 
-server = os.getenv("SERVER_BASE")
-wss_server = os.getenv("WSS_BASE")
+server = os.getenv("MLSDK_SERVER_BASE")
 session_id = None
 client = None
 events = []
@@ -59,7 +58,6 @@ async def test_create_handler():
         project_id="test_project",
         debug=debug,
         server_endpoint=server,
-        wss_endpoint=wss_server,
     )
 
     async def on_event(event: MLEvent):
