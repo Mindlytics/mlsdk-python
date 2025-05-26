@@ -40,6 +40,8 @@ langchain-core = "^0.3.61"
 notebook = "^7.4.2"
 ipykernel = "^6.29.5"
 nbstripout = "^0.8.1"
+langgraph = "^0.4.7"
+langchain = {extras = ["openai"], version = "^0.3.25"}
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

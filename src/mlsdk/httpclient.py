@@ -3,6 +3,7 @@
 import aiohttp
 import logging
 import backoff
+import os
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)  # Use module name
@@ -24,8 +25,8 @@ class HTTPClient:
         self,
         *,
         server_endpoint: Optional[str] = None,
-        api_key: str,
-        project_id: str,
+        api_key: Optional[str] = None,
+        project_id: Optional[str] = None,
         debug: bool,
     ) -> None:
         """Initialize the HTTP client with the given configuration.
@@ -36,9 +37,23 @@ class HTTPClient:
             project_id (str): The default project ID used to create sessions.
             debug (bool, optional): Enable debug logging if True.
         """
-        self.api_key = api_key
-        self.project_id = project_id
-        self.server_endpoint = server_endpoint or "https://app.mindlytics.ai"
+        if api_key is None and os.getenv("MLSDK_API_KEY") is None:
+            raise ValueError(
+                "API key must be provided either as an argument or through the environment variable 'MLSDK_API_KEY'"
+            )
+        if project_id is None and os.getenv("MLSDK_PROJECT_ID") is None:
+            raise ValueError(
+                "Project ID must be provided either as an argument or through the environment variable 'MLSDK_PROJECT_ID'"
+            )
+
+        ep = (
+            server_endpoint
+            or os.getenv("MLSDK_SERVER_BASE")
+            or "https://app.mindlytics.ai"
+        )
+        self.api_key = str(api_key or os.getenv("MLSDK_API_KEY"))
+        self.project_id = str(project_id or os.getenv("MLSDK_PROJECT_ID"))
+        self.server_endpoint = ep
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "X-App-ID": self.project_id,

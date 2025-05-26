@@ -66,9 +66,6 @@ class Client:
             # to handle localhost
             ws = re.sub(r":300", ":400", ws)
 
-        logger.debug(f"Using server endpoint: {ep}")
-        logger.debug(f"Using websocket endpoint: {ws}")
-
         config = ClientConfig(
             api_key=str(api_key or os.getenv("MLSDK_API_KEY")),
             project_id=str(project_id or os.getenv("MLSDK_PROJECT_ID")),
