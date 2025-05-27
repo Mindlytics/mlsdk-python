@@ -5,7 +5,7 @@ from typing import Optional, Dict, Union, Callable, Any, Awaitable
 import logging
 import os
 import re
-from .types import ClientConfig, SessionConfig, APIResponse, MLEvent
+from .types import ClientConfig, SessionConfig, MLEvent
 from .session import Session
 from .httpclient import HTTPClient
 from .ws import WS
@@ -93,7 +93,6 @@ class Client:
         id: Optional[str] = None,
         device_id: Optional[str] = None,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
-        err_callback: Optional[Callable[[APIResponse], None]] = None,
         on_event: Optional[Callable[[MLEvent], Awaitable[None]]] = None,
         on_error: Optional[Callable[[Exception], Awaitable[None]]] = None,
     ) -> Session:
@@ -107,7 +106,6 @@ class Client:
             id (str, optional): The ID of the user.
             device_id (str, optional): The device ID associated with the user.
             attributes (dict, optional): A dictionary of attributes associated with the session.
-            err_callback (callable, optional): A callback function to handle errors.
             on_event (callable, optional): A callback function to handle incoming events.
             on_error (callable, optional): A callback function to handle errors.
 
@@ -123,7 +121,6 @@ class Client:
             client=self.config,
             config=config,
             attributes=attributes,
-            err_callback=err_callback,
             on_event=on_event,
             on_error=on_error,
         )

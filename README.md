@@ -59,11 +59,11 @@ You may also register a function as a error callback if you'd like notification 
 ```python
 from mlsdk import Client, APIResponse
 
-def ml_error_reporter(err: APIResponse):
-    print(f"{err.status}: {err.message}")
+def ml_error_reporter(err: Exception):
+    print(str(err))
 
 client = Client(...)
-session = client.create_session(err_callback=ml_error_reporter)
+session = client.create_session(on_error=ml_error_reporter)
 ```
 
 Since your application is decoupled from the Mindlytics backend, you can only get communication errors this way.  Deeper errors that might happen on the Mindlytics backend while processing queued messages are not possible to get this way.  However, this SDK supports an optional websockets mechanism which you might choose to employ to receive these processing errors, and to receive Mindlytics generated events as they are generated.  See [Websocket Support](#websocket-support) below.
@@ -207,7 +207,8 @@ Using those two methods makes using the SDK pretty easy but does not give you co
 * id - (optional, None) If the user id for this session is known, you can pass it here.
 * device_id - (optional, None) A device id.  If user id is not passed, then device_id is required.
 * attributes - (optional, None) Can pass a dictionary of str|int|float|bool of custom attributes.
-* err_callback - (optional, None) A function that will be called whenever SDK detects an error with the Mindlytics service.
+* on_error - (optional, None) A function that will be called whenever SDK detects an error with the Mindlytics service.
+* on_event - (optional, None) If specified, will start a websocket client session and report events as they are generated my Mindlytics
 
 If an `id` is not passed, the session will be associated with a temporary anonymous user until the actual user is identified.
 

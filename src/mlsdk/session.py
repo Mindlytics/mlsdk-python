@@ -67,7 +67,6 @@ class Session:
         client: ClientConfig,
         config: SessionConfig,
         attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
-        err_callback: Optional[Callable[[APIResponse], None]] = None,
         on_event: Optional[Callable[[MLEvent], Awaitable[None]]] = None,
         on_error: Optional[Callable[[Exception], Awaitable[None]]] = None,
     ) -> None:
@@ -77,7 +76,6 @@ class Session:
             client (Client): The client instance used to communicate with the Mindlytics service.
             config (SessionConfig): The configuration for the session.
             attributes (dict, optional): Additional attributes associated with the session.
-            err_callback (callable, optional): A callback function to handle errors.
             on_event (callable, optional): A callback function to handle events.
             on_error (callable, optional): A callback function to handle errors.
         """
@@ -97,7 +95,6 @@ class Session:
             project_id=self.project_id,
             debug=client.debug,
         )
-        self.err_callback = err_callback
         if client.debug is True:
             logger.setLevel(logging.DEBUG)
         else:
@@ -152,8 +149,8 @@ class Session:
                 if response.get("errored", False):
                     self.history.append(APIResponse.model_validate(response))
                     self.errors += 1
-                    if self.err_callback is not None:
-                        self.err_callback(APIResponse.model_validate(response))
+                    if self.on_error is not None:
+                        await self.on_error(Exception(response.get("message")))
             self.queue.task_done()
         logger.debug(
             f"Finished processing messages in session with ID: {self.session_id}"
@@ -660,10 +657,22 @@ class Session:
         self.ws = WS(config=self.client)
         response = await self.ws.get_authorization_token(session_id=session_id)
         if response.get("errored", False):
-            raise Exception(response.get("message"))
+            # raise Exception(response.get("message"))
+            self.history.append(APIResponse.model_validate(response))
+            self.errors += 1
+            if self.on_error is not None:
+                await self.on_error(Exception(response.get("message")))
+            return
+
         authorization_key = response.get("authorization_key")
         if authorization_key is None:
-            raise Exception("Unable to obtain authorization key")
+            # raise Exception("Unable to obtain authorization key")
+            self.history.append(APIResponse.model_validate(response))
+            self.errors += 1
+            if self.on_error is not None:
+                await self.on_error(Exception("Unable to obtain authorization key"))
+            return
+
         logger.debug("Starting WebSocket listener...")
 
         # The following stuff is like new Promise(resolve, reject) in JS

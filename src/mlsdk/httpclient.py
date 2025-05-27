@@ -63,7 +63,21 @@ class HTTPClient:
         else:
             logger.setLevel(logging.WARNING)
 
-    @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_time=60)
+    @staticmethod
+    def _fatal_code(e: Exception) -> bool:
+        """Determine if the error is fatal and should not be retried."""
+        # returns a truthy value if the exception should not be retried
+        if hasattr(e, "status") and e.status is not None:
+            return 400 <= e.status < 500
+        return False
+
+    @backoff.on_exception(
+        backoff.expo,
+        aiohttp.ClientError,
+        max_time=60,
+        raise_on_giveup=False,
+        giveup=_fatal_code,
+    )
     async def send_request(
         self, *, method: str, url: str, data: dict
     ) -> Dict[str, Any]:
@@ -77,27 +91,34 @@ class HTTPClient:
         Returns:
             APIResponse: The response from the API.
         """
-        async with aiohttp.ClientSession() as session:
-            request_args: Dict[str, Any] = {
-                "headers": self.headers,
-                "timeout": aiohttp.ClientTimeout(total=60),
-            }
-            if method in ["POST", "PUT", "PATCH"]:
-                request_args["json"] = data
-            elif method == "GET":
-                request_args["params"] = data
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                request_args: Dict[str, Any] = {
+                    "headers": self.headers,
+                    "timeout": aiohttp.ClientTimeout(total=60),
+                }
+                if method in ["POST", "PUT", "PATCH"]:
+                    request_args["json"] = data
+                elif method == "GET":
+                    request_args["params"] = data
+                else:
+                    raise ValueError(f"Unsupported HTTP method: {method}")
 
-            async with session.request(
-                method,
-                f"{self.server_endpoint}{url}",
-                **request_args,
-            ) as response:
-                if response.status != 200:
-                    return {
-                        "errored": True,
-                        "status": response.status,
-                        "message": f"Error: {response.status} - {await response.text()}",
-                    }
-                return await response.json()
+                async with session.request(
+                    method,
+                    f"{self.server_endpoint}{url}",
+                    **request_args,
+                ) as response:
+                    if response.status != 200:
+                        return {
+                            "errored": True,
+                            "status": response.status,
+                            "message": f"Error: {response.status} - {await response.text()}",
+                        }
+                    return await response.json()
+        except Exception as e:
+            return {
+                "errored": True,
+                "status": -1,
+                "message": f"Exception: {str(e)}",
+            }
