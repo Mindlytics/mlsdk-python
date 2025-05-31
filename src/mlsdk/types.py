@@ -275,6 +275,54 @@ class ConversationUsage(BaseEvent):
     conversation_id: str
 
 
+class FunctionPropertiesModel(BaseModel):
+    """Properties associated with a function call in a conversation.
+
+    Attributes:
+        name (str): The name of the function.
+        args (Optional[str | None]): JSON string of function arguments.
+        result (Optional[str | None]): Function result.
+        runtime (Optional[int | None]): Runtime in milliseconds.
+    """
+
+    name: str  # function name
+    args: Optional[str | None] = None  # JSON string of function arguments
+    result: Optional[str | None] = None  # function result
+    runtime: Optional[int | None] = None  # runtime in milliseconds
+
+    # This enables additional properties of various types
+    model_config = {"extra": "allow"}  # Allows additional fields beyond defined ones
+
+    # Custom validator to ensure additional fields are string, number, or boolean
+    def model_post_init(self, __context: Any) -> None:
+        """Post-initialization validation to ensure additional fields are of the correct type."""
+        for field_name, value in self.__dict__.items():
+            if field_name not in (
+                "name",
+                "args",
+                "result",
+                "runtime",
+            ):
+                if not isinstance(value, (str, int, float, bool)):
+                    raise ValueError(
+                        f"Field '{field_name}' must be a string, number, or boolean, got {type(value).__name__}"
+                    )
+
+
+class FunctionCall(BaseEvent):
+    """Event class for a function call in a conversation.
+
+    Attributes:
+        type (str): The type of the event. Defaults to 'function'.
+        properties (FunctionPropertiesModel): The properties associated with the function call.
+    """
+
+    type: str = Field(default=WIRE_TYPE_TRACK)
+    event: str = Field(default=EVENT_CONVERSATION_FUNCTION)
+    properties: FunctionPropertiesModel
+    conversation_id: str
+
+
 class MLEvent(BaseModel):
     """Event class for Mindlytics events coming from the websocket."""
 

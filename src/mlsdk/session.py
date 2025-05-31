@@ -20,6 +20,8 @@ from .types import (
     Cost,
     TurnPropertiesModel,
     MLEvent,
+    FunctionPropertiesModel,
+    FunctionCall,
 )
 
 from typing import Optional, List, Dict, Union, Callable, Awaitable
@@ -633,6 +635,66 @@ class Session:
             session_id=str(self.session_id),
             conversation_id=str(conversation_id or self.conversation_id),
             properties=usage,
+        )
+        await self._enqueue(message.model_dump(exclude_none=True))
+
+    async def track_function_call(
+        self,
+        *,
+        timestamp: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        name: str,
+        args: Optional[str] = None,
+        result: Optional[str] = None,
+        runtime: Optional[int] = 0,
+        properties: Optional[Dict[str, Union[str, bool, int, float]]] = None,
+    ) -> None:
+        """Track a function call in the conversation.
+
+        This method can be called to track a function call in the conversation.  If the session is not started, it will
+        be started automatically.  If the conversation_id is not supplied, it will be used to associate the event with
+        the current conversation.  If there is no current conversation, a new conversation will be started.
+
+        Args:
+            timestamp (str, optional): The timestamp of the function call. Defaults to the current UTC timestamp.
+            conversation_id (str, optional): The ID of the conversation associated with the event.
+            name (str): The name of the function being called.
+            args (str, optional): The arguments passed to the function call.
+            result (str, optional): The result of the function call.
+            runtime (int, optional): The runtime of the function call in milliseconds. Defaults to 0.
+            properties (dict, optional): Additional properties associated with the function call.
+        """
+        if self.session_id is None:
+            await self.start_session(timestamp=timestamp)
+
+        # If conversation_id passed in is not None, then we can assume there is a conversation already started,
+        # otherwise we might start a new one
+
+        if conversation_id is not None:
+            if self.conversation_id is None:
+                self.conversation_id = await self.start_conversation(
+                    conversation_id=conversation_id, timestamp=timestamp
+                )
+
+        if self.conversation_id is None:
+            self.conversation_id = await self.start_conversation(timestamp=timestamp)
+
+        p = FunctionPropertiesModel(
+            name=name,
+            args=args,
+            result=result,
+            runtime=runtime,
+        )
+
+        if properties:
+            for k, v in properties.items():
+                setattr(p, k, v)
+
+        message = FunctionCall(
+            timestamp=timestamp or _utc_timestamp(),
+            session_id=str(self.session_id),
+            conversation_id=str(conversation_id or self.conversation_id),
+            properties=p,
         )
         await self._enqueue(message.model_dump(exclude_none=True))
 
