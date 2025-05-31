@@ -14,7 +14,28 @@ from mlsdk import Session, TokenBasedCost
 
 
 class MLChatRecorderCallback(AsyncCallbackHandler):
-    """Callback handler to record conversation turns and token usage."""
+    """Callback handler to record conversation turns and token usage.
+
+    When creatting the LLM chat model instance, you can add this callback to
+    the list of callbacks.  Something like this:
+
+    ```python
+    from mlsdk.helpers.langchain import MLChatRecorderCallback
+    from langchain.chat_models import ChatOpenAI
+    from mlsdk import Session
+
+    def initialize_llm(session: Session):
+      # A Mindlytics session is passed in...
+      llm = ChatOpenAI(
+          model=MODEL,
+          temperature=0.7,
+          callbacks=[
+              MLChatRecorderCallback(session),
+          ],
+      )
+      return llm
+    ```python
+    """
 
     def __init__(self, session: Session) -> None:
         """Initialize the callback with a Mindlytics session.
