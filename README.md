@@ -407,6 +407,27 @@ Use this method to track your own LLM costs.
 * conversation_id - (optional, None) The conversation id for this usage.  Defaults to current conversation.
 * cost: (required, Union[TokenBasedCost, Cost]) - A cost to be added to the conversation cost so far.
 
+```python
+await session.track_function_call(
+    name="my_function_name",
+    args='{"input1": 5, "input2": 6}',
+    result="17",
+    runtime=4093
+)
+```
+
+Use this to track tool calls during a conversation.
+
+**Arguments:**
+
+* timestamp - (optional, None) If importing past data you can specify a timestamp for this event.
+* conversation_id - (optional, None) The conversation id for this usage.  Defaults to current conversation.
+* name - (required, str) The function name.
+* args - (optional, str) The arguments to the function (usually a JSON string).
+* result - (optional, str) The function result as a string.
+* runtime - (optional, int) Number of milliseconds the function took to run.
+* properties - (optional, dict) A dictionary of arbitrary properties you may want to associate with this function call.
+
 ## HTTPClient
 
 There is a class you can use to communicate with the raw Mindlytics backend service endpoints.
