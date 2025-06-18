@@ -27,7 +27,7 @@ class HTTPClient:
         server_endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         project_id: Optional[str] = None,
-        debug: bool,
+        debug: Optional[bool] = False,
     ) -> None:
         """Initialize the HTTP client with the given configuration.
 

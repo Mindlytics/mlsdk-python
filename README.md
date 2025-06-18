@@ -90,7 +90,7 @@ You can set environment variables for `MLSDK_API_KEY` and `MLSDK_PROJECT_ID` whi
 An instance of the Mindlytics client object.  This is used primarily to create sessions, but has two other methods for identifying users and managing aliasing outside of normal sessions.
 
 ```python
-from mlsdk import Client, MLHTTPError
+from mlsdk import Client
 
 try:
     await client.user_identify(
@@ -101,8 +101,8 @@ try:
             "country": "United States"
         }
     )
-except MLHTTPError as (e):
-    print(f"{e.status} - {e.message}")
+except Exception as (e):
+    print(e.message)
 ```
 
 Used to identify new users or devices and to merge traits on existing users or devices.
@@ -114,15 +114,15 @@ Used to identify new users or devices and to merge traits on existing users or d
 * traits - (optional, None) - A dict of user or device traits.
 
 ```python
-from mlsdk import Client, MLHTTPError
+from mlsdk import Client
 
 try:
     await client.user_alias(
         id="jjacob",
         previous_id="JJ@mail.com",
     )
-except MLHTTPError as (e):
-    print(f"{e.status} - {e.message}")
+except Exception as (e):
+    print(e.message)
 ```
 
 Used to create an alias for an existing user.
@@ -233,10 +233,10 @@ To send events to Mindlytics you must start a session.  In some cases, this sess
 * session_id - The id for this session.  This session_id should be passed as an argument to subsequent events sent into this session.
 
 ```python
-await session.send_session()
+await session.end_session()
 ```
 
-You must call this method to send a session.  This will block and wait until all pending events are send off to the Mindlytics server.  If you do **not** call this method, there is a chance you can lose data if it has not been transferred yet.  If there are open conversations associated with the session they are automatically closed.  When using the SDK as an asyncio context manager, this method is automatically called when the context is exited.
+You must call this method to end a session.  This will block and wait until all pending events are send off to the Mindlytics server.  If you do **not** call this method, there is a chance you can lose data if it has not been transferred yet.  If there are open conversations associated with the session they are automatically closed.  When using the SDK as an asyncio context manager, this method is automatically called when the context is exited.
 
 **Arguments:**
 
@@ -447,8 +447,16 @@ response = await send_request(
         # your data
     }
 )
+```
 
-# The response is a dictionary
+The response is a dictionary that looks like:
+
+```python
+{
+    "errored": True, # or False
+    "status": 500,   # http status code
+    "message": "..." # Error message
+}
 ```
 
 ## Websocket Support
