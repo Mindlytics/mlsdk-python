@@ -62,7 +62,7 @@ class Client:
         ws = wss_endpoint
         if ws is None:
             ws = re.sub(r"^http", "ws", ep)
-            ws = re.sub(r"//app", "wss", ws)
+            ws = re.sub(r"//app", "//wss", ws)
             # to handle localhost
             ws = re.sub(r":300", ":400", ws)
 

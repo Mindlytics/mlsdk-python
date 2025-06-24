@@ -1,6 +1,6 @@
 [project]
 name = "mlsdk-python"
-version = "1.0.2"
+version = "1.0.3"
 description = ""
 authors = [
     {name = "Mindlytics",email = "info@mindlytics.ai"}
