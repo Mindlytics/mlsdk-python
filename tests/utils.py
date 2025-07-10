@@ -1,6 +1,7 @@
 import aiohttp
 import os
 import json
+import uuid
 
 
 async def get_api_key(organization_id: str) -> str:
@@ -46,6 +47,15 @@ async def cleanup() -> dict:
                 raise Exception(f"Error: {response.status} - {await response.text()}")
             data = await response.json()
             return data
+
+
+def uid() -> str:
+    """Generate a unique identifier.
+
+    Returns:
+        str: A unique identifier in the form of a UUID string.
+    """
+    return str(uuid.uuid4())
 
 
 async def fetch(

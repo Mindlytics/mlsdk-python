@@ -40,10 +40,15 @@ class SessionConfig(BaseModel):
     """Configuration for a session in the Mindlytics Client.
 
     Attributes:
+        session_id (str): The unique identifier for the session.
+        conversation_id (str, optional): The conversation ID associated with the session.
         project_id (str): The ID of the project associated with the session.
         id (str, optional): The ID of the user associated with the session.
+        device_id (str, optional): The device ID associated with the user.
     """
 
+    session_id: str
+    conversation_id: Optional[str] = None
     project_id: str
     id: Optional[str] = None
     device_id: Optional[str] = None
@@ -74,12 +79,16 @@ class BaseEvent(BaseModel):
     """Base class for events.
 
     Attributes:
+        user_id (str, optional): The unique identifier for the event.
+        device_id (str, optional): The device ID associated with the event.
         timestamp (str): The timestamp of the event.
         session_id (str): The ID of the session associated with the event.
         conversation_id (str, optional): The ID of the conversation associated with the event.
         type (str): The type of the event.
     """
 
+    user_id: Optional[str] = None
+    device_id: Optional[str] = None
     timestamp: str
     session_id: str
     conversation_id: Optional[str] = None

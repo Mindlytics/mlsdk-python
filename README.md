@@ -5,44 +5,102 @@ This is the [Mindlytics](https://mindlytics.ai) client-side SDK for Python clien
 This SDK uses `asyncio` and the `asyncio.Queue` to decouple your existing client code from the communication overhead of sending data to Mindlytics.  When you send events with this SDK you are simply pushing data into a queue.  A background coroutine in the SDK will pop the queue and handle the actual communication with Mindlytics, handling errors, timeouts, rate limits, etc with zero impact to your main application.
 
 ```python
+# A simple chatbot server that integrates with the Mindlytics service
+
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
 import asyncio
-from mlsdk import Client
+import os
+from openai import OpenAI
+from dotenv import load_dotenv
+from mlsdk import Client as MLClient
 
-async def main():
-    client = Client(
-        api_key="YOUR_WORKSPACE_API_KEY",
-        project_id="YOUR_PROJECT_ID",
+load_dotenv()
+app = FastAPI()
+openai = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+@app.middleware("http")
+async def add_session_to_request(request: Request, call_next):
+    # Get client-side ids from headers
+    session_id = request.headers.get("x-session-id")
+    conversation_id = request.headers.get("x-conversation-id")
+    user_id = request.headers.get("x-user-id")
+    device_id = request.headers.get("x-device-id")
+
+    # Instanciate a client object with your organization api key and project id
+    ml = MLClient(
+        api_key=os.environ.get("MLSDK_API_KEY",
+        project_id=os.environ.get("MLSDK_PROJECT_ID",
     )
-    session_context = client.create_session(device_id="test_device_id")
-    # use as a context manager
-    async with session_context as session:
-        await session.track_conversation_turn(
-            user="I would like book an airline flight to New York.",
-            assistant="No problem!  When would you like to arrive?",
-        )
-    # leaving the context will automatically flush any pending data in the queue and wait until
-    # everything has been sent.
 
-asyncio.run(main())
+    # session_id is required.  It should be a unique uuid representing a unique user session.
+    # conversation_id is optional, but required if sending conversation-related events.
+    # One of user_id or device_id is required.
+    request.mlsession = ml.create_session(
+        session_id=session_id,
+        conversation_id=conversation_id,
+        id=user_id,
+        device_id=device_id,
+    )
+
+    try:
+        response = await call_next(request)
+    finally:
+        # Flush the mindlytics event queue to ensure all messages are sent
+        await request.mlsession.flush()
+
+    return response
+
+# Simple streamer function to stream tokens back to the client.
+async def openai_streamer(mlsession, question: str):
+    assistant = ""
+    stream = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": question}],
+        stream=True,
+    )
+    for chunk in stream:
+        content = chunk.choices[0].delta.content or ""
+        assistant.append(content)  # Capture the entire response ...
+        yield content
+
+    # Send the complete "turn" to the Mindlytics service
+    await mlsession.track_conversation_turn(
+        user: question,
+        assistant: assistant
+    )
+
+class AskRequest(BaseModel):
+    question: str
+
+# Endpoint for asking a question of the assistant
+@app.post("/ask-assistant")
+async def ask_assistant(ask_request: AskRequest):
+    return StreamingResponse(openai_streamer(ask_request.mlsession, ask_request.question), media_type="text/event-stream")
+
+# Call this when the session/conversation is finished.
+@app.post("end-session")
+async def end-session(request: Request):
+    await request.mlsession.end_session()
+    return {"status": "ok"}
 ```
 
-The SDK can be used as a context manager, but it can also be used outside a context for more control.
+The SDK is stateless as long as you are consistent with session_ids and conversation_ids.  You must explicitly call `end_conversation()` when a conversation is finished, or an `end_session()` which will automatically end all open conversations associated with the session.  This is required so that Mindlytics can perform post-conversation analysis.
 
 ## Concepts
 
-Except for client-level user identify and alias, all other communication with Mindlytics is contained within a "session".  In a session you may send your own "user defined" events; that is, events that are not specific to Mindlytics but are meaningful to you.  In a session you may also start a "conversation" and send special Mindlytics events related to this conversation.  Events happen at a point in time, but sessions and conversations have a start and an end and thus a specific duration.  This means you have to start them and end them.  Depending on how you use the SDK, sessions and conversations can be automatically started and ended for you and you don't have to worry about it.
-
-Sessions, conversations and events have attributes (sessions) and properties (conversations, events) that are optional, but which you can populate with meaningful data that you wish to associate with them.
+Except for client-level user identify and alias, all other communication with Mindlytics is contained within a "session".  In a session you may send your own "user defined" events; that is, events that are not specific to Mindlytics but are meaningful to you.  In a session you may also send special Mindlytics events related to conversations.  Events happen at a point in time, but sessions and conversations they belong to have a start and an end and thus a specific duration.
 
 ### User ID and Device ID
 
 User IDs are something you can decide to use or not use.  If you decide to use them, user ids should be unique for a organization/project pair.  You can use anything you like as long as it is a string, and is unique for each user in a project.  Device IDs should represent unique devices, like a browser instance or a mobile device uuid.  Device IDs are considered globally unique.  If you do not use user ids, then you must use device ids.  You can use both.
 
-| TBD more detail needed here
+For example, when a session begins you may not know the id of the user who starts it.  If this is the case, you must supply a "device_id" that is globally unique and represents the device the user is communicating on.  This might be a mobile device uuid.  This is harder on a browser, but you might use a uuid stored in a local cookie.  Sometime during the session/conversation you might discover who the user is and then you can issue a "session_user_identify" event with the user id, who will then be associated with the device_id and the session.
 
 ## Architecture
 
-The Mindlytics SDK is designed to have an absolute minimal impact on your application.  The SDK requires `asyncio` and uses an asynchronous queue to decouple your application from the actual communication with Mindlytics.  When you interact with the SDK your data gets pushed into an asynchronous FIFO and the SDK returns control to your application immediately.  In the background the SDK removes data from the queue and tries to send it to the Mindlytics service.  The SDK handles errors, and any timeouts, retries or rate limits as it tries to get the data to the server.  When your application exits there is a way to wait on the SDK to completely drain the queue so no data is lost.
+The Mindlytics SDK is designed to have a minimal impact on your application.  The SDK requires `asyncio` and uses an asynchronous queue to decouple your application from the actual communication with Mindlytics.  When you interact with the SDK your data gets pushed into an asynchronous FIFO and the SDK returns control to your application immediately.  In the background the SDK removes data from the queue and tries to send it to the Mindlytics service.  The SDK handles errors, and any timeouts, retries or rate limits as it tries to get the data to the server.  When your application exits there is a way to wait on the SDK to completely drain the queue so no data is lost.
 
 ## Errors
 
@@ -133,80 +191,57 @@ Used to create an alias for an existing user.
 * previous_id - The previous id value for this user.  The previous_id is used for the lookup.
 
 ```python
-session = client.create_session(id='jjacob')
+session = client.create_session(
+    session_id=str(uuid.uuid4()),
+    conversation_id=str(uuid.uuid4()),
+    id='jjacob'
+)
 
-# Use session as a context manager
-async with session as ml:
-    await ml.track_event(event="Start Chat", properties={"from": "shopping cart"})
-    await session.track_conversation_turn(
-        user="I need help choosing the right lipstick for my skin color.",
-        assistant="I can help you with that.  What color would you use to describe your skin tone?",
-
-# Or send events without a context, but make sure to end the session to flush the event queue!
 await session.track_event(event="Start Chat", properties={"from": "shopping cart"})
 await session.track_conversation_turn(
     user="I need help choosing the right lipstick for my skin color.",
     assistant="I can help you with that.  What color would you use to describe your skin tone?",
 await session.end_session()
-
-# Or control the entire workflow manually
-session_id = await sesson.start_session(
-    timestamp="2025-04-03T07:35:10.0000Z",
-    id="jjacob",
-    attributes={
-        "store": "135"
-    }
-)
-await session.track_event(
-    timestamp="2025-04-03T07:35:35.0000Z",
-    event="Start Chat",
-    properties={
-        "from": "shopping cart"
-    }
-)
-conversation_id = await session.start_conversation(
-    timestamp="2025-04-03T07:35:35.0000Z",
-    properties={
-        "timezone": "America/Los_Angeles"
-    }
-)
-await session.track_conversation_turn(
-    conversation_id=conversation_id,
-    timestamp="2025-04-03T07:36:03.0000Z",
-    user="I need help choosing the right lipstick for my skin color.",
-    assistant="I can help you with that.  What color would you use to describe your skin tone?",
-    cost={
-        "model": "gpt-4o",
-        "prompt_tokens": 15,
-        "completion_tokens": 19
-    }
-)
-await session.end_conversation(
-    conversation_id=conversation_id,
-    timestamp="2025-04-03T07:36:40.0000Z",
-    properties={
-        "device": "browser"
-    }
-)
-await session.end_session(
-    timestamp="2025-04-03T07:37:15.0000Z",
-    attributes={
-        "resolved": True
-    }
-)
+await session.flush()
 ```
 
-Depending on your specific needs, you can use the Mindlytics SDK in a few different ways.  The safest and easiest way is to use a session as an `asynio` context manager.  If you use it this way, then sessions and conversations are created as needed internally and are shut down gracefully when the session instance goes out of context or is destroyed.  All you have to do within the context is send events.
+In the example above, the session consists of one conversation and all events are associated with that conversation.  But you can have multiple ongoing conversations within a single session, as long as those conversations belong to the same user or device.  You can do this by passing a conversation_id in a more granular way and by calling `end_conversation()`.  You can still call `end_session()` and that will automatically end all open conversations.  Here is an example:
 
-If you cannot use a context, then you can call session methods by themselves.  Sessions and conversations will be started on demand as before, but you **must** explicitly call `await session.end_session()` before exiting your application to ensure that all queued requests get sent to the Mindlytics service.
+```python
+conversation_id_1 = str(uuid.uuid4())
+conversation_id_2 = str(uuid.uuid4())
 
-Using those two methods makes using the SDK pretty easy but does not give you complete control.  For complete control, you may explicitly start and end sessions and conversations.  If you do this, you can override timestamps if for example, you are importing past data into Mindlytics.  Sessions and conversations can also have custom attributes and properties, both on "start" and "end", but only if you call those methods directly.  If you call conversation start/end explicitly it is also possible to maintain multiple conversations in one session.
+session = client.create_session(
+    session_id=str(uuid.uuid4()),
+    id='jjacob'
+)
+
+# custom events do not have to be associated with a conversation.
+await session.track_event(event="Start Chat", properties={"from": "shopping cart"})
+
+await session.track_conversation_turn(
+    conversation_id=conversation_id_1,
+    user="I need help choosing the right lipstick for my skin color.",
+    assistant="I can help you with that.  What color would you use to describe your skin tone?",
+
+await session.track_conversation_turn(
+    conversation_id=conversation_id_2,
+    user="Do we sell lipstick?",
+    assistant="Yes",
+)
+
+await session.end_conversation(conversation_id=conversation_id_2)
+await session.end_conversation(conversation_id=conversation_id_1)
+
+await session.flush()
+```
 
 **Arguments:**
 
+* session_id - (required, str) A globally unique session id for this session.
+* conversation_id - (optional, None) A globally unique conversation_id to associated with all events in the session.
 * id - (optional, None) If the user id for this session is known, you can pass it here.
 * device_id - (optional, None) A device id.  If user id is not passed, then device_id is required.
-* attributes - (optional, None) Can pass a dictionary of str|int|float|bool of custom attributes.
 * on_error - (optional, None) A function that will be called whenever SDK detects an error with the Mindlytics service.
 * on_event - (optional, None) If specified, will start a websocket client session and report events as they are generated my Mindlytics
 
@@ -215,33 +250,27 @@ If an `id` is not passed, the session will be associated with a temporary anonym
 ## Session API
 
 ```python
-session_id = await session.start_session(id='jjacob')
+await session.flush()
 ```
 
-To send events to Mindlytics you must start a session.  In some cases, this session is created for you and you don't need to worry about it.
+This method will block and wait until all pending events are send off to the Mindlytics server.  If you do **not** call this method, there is a chance you can lose data if it has not been transferred yet.  Once this method is called you can no longer send any events to the Mindlytics service using this session instance.
 
-**Arguments:**
+```python
+await session.flush_and_continue()
+```
 
-* session_id - (optional, None) You can supply your own globally unique session id.  If you do not, then a uuid string is created by the SDK.
-* timestamp - (optional, None) If importing past data you can specify a timestamp for the creation of this session.
-* id - (optional, None) The user id for this session, if you know it.  Otherwise an anonymous user will be created.
-* device_id - (optional, None) A unique device id.  If user id is not passed, then device_id is required.
-* attributes - (optional, None) A dictionary of arbitrary attributes you may want to associated with this session.
-
-**Returns:**
-
-* session_id - The id for this session.  This session_id should be passed as an argument to subsequent events sent into this session.
+This method will block and wait until all pending events are send off to the Mindlytics server.  Calling this version of "flush" lets you continue to send messages to the Mindlyitcs service using this session instance.  You should eventually call `session.flush()` before destroying the session instance to make sure all asyncio tasks are cleaned up.
 
 ```python
 await session.end_session()
 ```
 
-You must call this method to end a session.  This will block and wait until all pending events are send off to the Mindlytics server.  If you do **not** call this method, there is a chance you can lose data if it has not been transferred yet.  If there are open conversations associated with the session they are automatically closed.  When using the SDK as an asyncio context manager, this method is automatically called when the context is exited.
+You must call this method to end a session.  If there are open conversations associated with the session they are automatically closed.
 
 **Arguments:**
 
 * timestamp - (optional, None) If importing past data you can specify a timestamp for the end of this session.
-* attributes - (optional, None) A dictionary of arbitrary attributes you may want to associated with this session.  If specified, these attributes will be merged into any attributes added when the session was created.
+* attributes - (optional, None) A dictionary of arbitrary attributes you may want to associated with this session.
 
 ```python
 if session.has_errors():
@@ -323,26 +352,10 @@ Use this method to send your own custom events to the Mindlytics service.
 * properties (optional, dict) A dictionary of arbitrary properties you may want to associate with this event.  Supported value types are str, int, bool and float.
 
 ```python
-conversation_id = await session.start_conversation()
-```
-
-This opens a new conversation within the session.  You may have multiple conversations open within a single session.  Some special events (describes below) require a conversation id.
-
-**Arguments:**
-
-* timestamp - (optional, None) If importing past data you can specify a timestamp for this event.  This would be the start date of the conversation.
-* conversation_id - (optional, None) You can supply your own globally unique conversation id.  If you do not, then a uuid string is created by the SDK.
-* properties (optional, dict) A dictionary of arbitrary properties you may want to associate with this conversation.  Supported value types are str, int, bool and float.
-
-**Returns:**
-
-* conversation_id (str) - The conversation id.
-
-```python
 await session.end_conversation()
 ```
 
-This method is used to close a conversation.  Conversations have a duration, and this method is needed to identify the end.  When using the SDK as an asynio context, this method will be called automatically when the context is closed.  Also, when `session.end_session()` is called, any open conversations are also closed.
+This method is used to close a conversation.  Conversations have a duration, and this method is needed to identify the end.  When `session.end_session()` is called, any open conversations are also closed.
 
 **Arguments:**
 

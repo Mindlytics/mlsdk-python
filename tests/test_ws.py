@@ -3,7 +3,7 @@ import pytest_asyncio
 import os
 from mlsdk import Client, MLEvent
 import logging
-from .utils import get_api_key, cleanup
+from .utils import get_api_key, cleanup, uid
 import asyncio
 
 debug = True
@@ -12,10 +12,6 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)  # Use module name
 
 server = os.getenv("MLSDK_SERVER_BASE")
-session_id = None
-client = None
-events = []
-errors = []
 
 if server is None:
     logger.warning(
@@ -49,10 +45,8 @@ async def test_get_api_key():
 async def test_create_handler():
     if server is None:
         pytest.skip("SERVER_BASE environment variable is not set.")
-    global session_id
-    global client
-    global events
-    global errors
+    events = []
+    errors = []
     client = Client(
         api_key=api_key,
         project_id="test_project",
@@ -70,26 +64,23 @@ async def test_create_handler():
         logger.error(f"Error: {error}")
         errors.append(error)
 
-    # await client.start_listening(
-    #    on_event=on_event,
-    #    on_error=on_error,
-    # )
-
-    session_context = client.create_session(
+    session = client.create_session(
+        session_id=uid(),
         device_id="test_device_id",
         on_event=on_event,
         on_error=on_error,
     )
-    async with session_context as session:
-        await session.track_event(
-            event="test_event",
-            properties={
-                "foo": "bar",
-                "bool": True,
-                "int": 42,
-                "float": 3.14,
-            },
-        )
+    await session.track_event(
+        event="test_event",
+        properties={
+            "foo": "bar",
+            "bool": True,
+            "int": 42,
+            "float": 3.14,
+        },
+    )
+    await session.end_session()
+    await session.flush()
 
     count = 30
     while len(events) < 3:
@@ -100,7 +91,7 @@ async def test_create_handler():
             logger.error("Timeout waiting for events")
             break
 
-    # await client.stop_listening()
+    logger.debug(f"Received {len(events)} events and {len(errors)} errors")
     assert len(events) == 3
     assert len(errors) == 0
     assert events[0].event == "Session Started"

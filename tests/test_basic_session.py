@@ -3,7 +3,7 @@ import pytest_asyncio
 import os
 from mlsdk import Client
 import logging
-from .utils import get_api_key, fetch, cleanup
+from .utils import get_api_key, fetch, cleanup, uid
 import asyncio
 
 debug = False
@@ -51,14 +51,11 @@ async def test_create_session():
     client = Client(
         api_key=api_key, project_id="test_project", debug=debug, server_endpoint=server
     )
-    session_context = client.create_session(device_id="test_device_id")
-    session_id = await session_context.start_session(device_id="test_device_id")
-    assert session_id is not None
-    assert isinstance(session_id, str)
-    assert len(session_id) > 0
-    assert session_id == session_context.session_id
-    await session_context.end_session()
-    assert session_context.has_errors() is False
+    session_id = uid()
+    session = client.create_session(session_id=session_id, device_id="test_device_id")
+    await session.end_session()
+    await session.flush()
+    assert session.has_errors() is False
 
     # wait a few seconds for mindlytics to process this event with its llms
     await asyncio.sleep(2)
@@ -91,9 +88,9 @@ async def test_create_session_and_identify_user():
         debug=debug,
         server_endpoint=server,
     )
-    session_context = client.create_session(device_id="test_device_id")
-    session_id = await session_context.start_session(device_id="test_device_id")
-    await session_context.user_identify(
+    session_id = uid()
+    session = client.create_session(session_id=session_id, device_id="test_device_id")
+    await session.user_identify(
         id="test_user",
         traits={
             "name": "Test User",
@@ -103,8 +100,9 @@ async def test_create_session_and_identify_user():
             "height": 1.75,
         },
     )
-    await session_context.end_session()
-    assert session_context.has_errors() is False
+    await session.end_session()
+    await session.flush()
+    assert session.has_errors() is False
     # fetch the session
     session = await fetch(
         api_key=api_key,
@@ -151,10 +149,11 @@ async def test_create_session_with_existing_user_id():
             "age": 30,
         },
     )
-    session_context = client.create_session(id="jj@mail.com")
-    session_id = await session_context.start_session(id="jj@mail.com")
-    await session_context.end_session()
-    assert session_context.has_errors() is False
+    session_id = uid()
+    session = client.create_session(session_id=session_id, id="jj@mail.com")
+    await session.end_session()
+    await session.flush()
+    assert session.has_errors() is False
     # fetch the session
     session = await fetch(
         api_key=api_key,
@@ -189,18 +188,15 @@ async def test_create_session_with_attributes():
         debug=debug,
         server_endpoint=server,
     )
-    session_context = client.create_session(device_id="test_device_id")
-    session_id = await session_context.start_session(
-        device_id="test_device_id",
+    session_id = uid()
+    session = client.create_session(session_id=session_id, device_id="test_device_id")
+    await session.end_session(
         attributes={
             "custom": "attribute",
-        },
+        }
     )
-    assert session_id is not None
-    assert isinstance(session_id, str)
-    assert len(session_id) > 0
-    await session_context.end_session()
-    assert session_context.has_errors() is False
+    await session.flush()
+    assert session.has_errors() is False
     # fetch the session
     session = await fetch(
         api_key=api_key,
@@ -229,19 +225,19 @@ async def test_simple_conversation():
         debug=debug,
         server_endpoint=server,
     )
-    session_context = client.create_session(device_id="test_device_id")
-    session_id = await session_context.start_session(device_id="test_device_id")
-    conversation_id = await session_context.start_conversation()
-    assert conversation_id is not None
-    assert isinstance(conversation_id, str)
-    assert len(conversation_id) > 0
-    assert conversation_id == session_context.conversation_id
+    session_id = uid()
+    conversation_id = uid()
+    session_context = client.create_session(
+        session_id=session_id,
+        conversation_id=conversation_id,
+        device_id="test_device_id",
+    )
     await session_context.track_conversation_turn(
         user="I have to pee.  Can you help me find a bathroom?",
         assistant="I am sorry to report that there are no bathrooms in this virtual world.",
     )
-    await session_context.end_conversation()
     await session_context.end_session()
+    await session_context.flush()
     assert session_context.has_errors() is False
     # wait a few seconds for mindlytics to process this event with its llms
     await asyncio.sleep(5)

@@ -136,7 +136,9 @@ class WS:
                         except Exception as e:
                             await log_error(e)
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("WebSocket listener cancelled.")
+                    await websocket.close()
+                    raise
                 except websockets.exceptions.ConnectionClosedError:
                     pass
                 except Exception as e:

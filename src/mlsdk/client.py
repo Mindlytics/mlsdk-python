@@ -90,9 +90,10 @@ class Client:
     def create_session(
         self,
         *,
+        session_id: str,
+        conversation_id: Optional[str] = None,
         id: Optional[str] = None,
         device_id: Optional[str] = None,
-        attributes: Optional[Dict[str, Union[str, bool, int, float]]] = None,
         on_event: Optional[Callable[[MLEvent], Awaitable[None]]] = None,
         on_error: Optional[Callable[[Exception], Awaitable[None]]] = None,
     ) -> Session:
@@ -103,9 +104,10 @@ class Client:
         be used.  Pass a id to associate the session with a specific user if you know the user.
 
         Args:
+            session_id (str): The unique identifier for the session.
+            conversation_id (str, optional): The conversation ID associated with the session.
             id (str, optional): The ID of the user.
             device_id (str, optional): The device ID associated with the user.
-            attributes (dict, optional): A dictionary of attributes associated with the session.
             on_event (callable, optional): A callback function to handle incoming events.
             on_error (callable, optional): A callback function to handle errors.
 
@@ -113,6 +115,8 @@ class Client:
             Session: A new session object.
         """
         config = SessionConfig(
+            session_id=session_id,
+            conversation_id=conversation_id,
             project_id=self.config.project_id,
             id=id,
             device_id=device_id,
@@ -120,7 +124,6 @@ class Client:
         return Session(
             client=self.config,
             config=config,
-            attributes=attributes,
             on_event=on_event,
             on_error=on_error,
         )
