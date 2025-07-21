@@ -37,7 +37,7 @@ async def add_session_to_request(request: Request, call_next):
     # session_id is required.  It should be a unique uuid representing a unique user session.
     # conversation_id is optional, but required if sending conversation-related events.
     # One of user_id or device_id is required.
-    request.mlsession = ml.create_session(
+    request.state.mlsession = ml.create_session(
         session_id=session_id,
         conversation_id=conversation_id,
         id=user_id,
@@ -48,7 +48,7 @@ async def add_session_to_request(request: Request, call_next):
         response = await call_next(request)
     finally:
         # Flush the mindlytics event queue to ensure all messages are sent
-        await request.mlsession.flush()
+        await request.state.mlsession.flush()
 
     return response
 
@@ -77,12 +77,12 @@ class AskRequest(BaseModel):
 # Endpoint for asking a question of the assistant
 @app.post("/ask-assistant")
 async def ask_assistant(ask_request: AskRequest):
-    return StreamingResponse(openai_streamer(ask_request.mlsession, ask_request.question), media_type="text/event-stream")
+    return StreamingResponse(openai_streamer(ask_request.state.mlsession, ask_request.question), media_type="text/event-stream")
 
 # Call this when the session/conversation is finished.
 @app.post("end-session")
 async def end-session(request: Request):
-    await request.mlsession.end_session()
+    await request.state.mlsession.end_session()
     return {"status": "ok"}
 ```
 
